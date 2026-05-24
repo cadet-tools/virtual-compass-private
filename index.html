@@ -5,7 +5,6 @@
   <title>Rīks nedarbojas — Virtuālais kompass</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Ja izmanto kopīgo stilu, atstāj šo rindu -->
   <link rel="stylesheet" href="style.css">
 
   <style>
@@ -23,20 +22,19 @@
       flex-direction: column;
     }
 
-   
-
     .vc-coming-main {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 32px 16px 40px;
+      padding: 40px 20px 52px; /* 32→40, 16→20, 40→52 */
     }
 
+    /* === KARTE: +30% === */
     .vc-coming-card {
-      width: min(520px, 100%);
-      padding: 28px 22px 26px;
-      border-radius: 24px;
+      width: min(676px, 100%);           /* 520 → 676 */
+      padding: 36px 29px 34px;           /* 28→36, 22→29, 26→34 */
+      border-radius: 31px;               /* 24 → 31 */
       border: 1px solid rgba(148,163,184,0.4);
       background:
         radial-gradient(circle at top left, rgba(248,113,113,0.15), transparent 55%),
@@ -45,8 +43,8 @@
         0 24px 60px rgba(15,23,42,0.9),
         0 0 0 1px rgba(15,23,42,0.9);
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 150px;
-      gap: 20px;
+      grid-template-columns: minmax(0, 1fr) 195px; /* 150 → 195 */
+      gap: 26px;                         /* 20 → 26 */
       position: relative;
       overflow: hidden;
     }
@@ -58,63 +56,65 @@
       }
     }
 
+    /* === BADGE: +30% === */
     .vc-coming-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
+      gap: 8px;                          /* 6 → 8 */
+      padding: 5px 13px;                 /* 4→5, 10→13 */
       border-radius: 999px;
       background: rgba(15,23,42,0.9);
       border: 1px solid rgba(248,113,113,0.4);
-      font-size: 11px;
+      font-size: 14px;                   /* 11 → 14 */
       text-transform: uppercase;
       letter-spacing: 0.12em;
       color: #fecaca;
-      margin-bottom: 10px;
+      margin-bottom: 13px;               /* 10 → 13 */
     }
 
     .vc-dot {
-      width: 7px;
-      height: 7px;
+      width: 9px;                        /* 7 → 9 */
+      height: 9px;
       border-radius: 50%;
       background: #f97373;
       box-shadow: 0 0 0 5px rgba(248,113,113,0.25);
     }
 
+    /* === VIRSRAKSTS: +30% === */
     .vc-coming-title {
-      font-size: clamp(22px, 3vw, 26px);
-      margin: 0 0 6px;
+      font-size: clamp(29px, 3.9vw, 34px); /* 22→29, 3→3.9, 26→34 */
+      margin: 0 0 8px;                   /* 6 → 8 */
       color: #f9fafb;
     }
 
     .vc-coming-subtitle {
-      font-size: 13px;
+      font-size: 17px;                   /* 13 → 17 */
       text-transform: uppercase;
       letter-spacing: 0.15em;
       color: #9ca3af;
-      margin-bottom: 14px;
+      margin-bottom: 18px;               /* 14 → 18 */
     }
 
     .vc-coming-text {
-      font-size: 14px;
+      font-size: 18px;                   /* 14 → 18 */
       line-height: 1.6;
       color: #e5e7eb;
-      margin-bottom: 14px;
+      margin-bottom: 18px;               /* 14 → 18 */
     }
 
     .vc-coming-list {
-      font-size: 13px;
+      font-size: 17px;                   /* 13 → 17 */
       color: #9ca3af;
-      padding-left: 18px;
-      margin: 0 0 16px;
+      padding-left: 23px;                /* 18 → 23 */
+      margin: 0 0 21px;                  /* 16 → 21 */
     }
 
     .vc-coming-list li + li {
-      margin-top: 4px;
+      margin-top: 5px;                   /* 4 → 5 */
     }
 
     .vc-coming-meta {
-      font-size: 11px;
+      font-size: 14px;                   /* 11 → 14 */
       text-transform: uppercase;
       letter-spacing: 0.16em;
       color: #6b7280;
@@ -122,18 +122,18 @@
     }
 
     .vc-coming-actions {
-      margin-top: 16px;
+      margin-top: 21px;                  /* 16 → 21 */
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 13px;                         /* 10 → 13 */
       align-items: center;
     }
 
     .vc-btn-primary {
       border-radius: 999px;
       border: none;
-      padding: 8px 16px;
-      font-size: 12px;
+      padding: 10px 21px;                /* 8→10, 16→21 */
+      font-size: 16px;                   /* 12 → 16 */
       font-weight: 600;
       letter-spacing: 0.12em;
       text-transform: uppercase;
@@ -145,7 +145,7 @@
         0 0 0 1px rgba(15,23,42,0.9);
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;                         /* 8 → 10 */
       transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
     }
 
@@ -158,22 +158,22 @@
     }
 
     .vc-btn-primary span.vc-arrow {
-      font-size: 16px;
+      font-size: 21px;                   /* 16 → 21 */
       transform: translateY(1px);
     }
 
     .vc-coming-hint {
-      font-size: 11px;
+      font-size: 14px;                   /* 11 → 14 */
       color: #9ca3af;
     }
 
-    /* ===== Dekoratīvais “kompass” ===== */
+    /* ===== Dekoratīvais "kompass": +30% ===== */
     .vc-compass-wrap {
       position: relative;
       align-self: center;
       justify-self: center;
-      width: 150px;
-      height: 150px;
+      width: 195px;                      /* 150 → 195 */
+      height: 195px;
       display: grid;
       place-items: center;
     }
@@ -187,7 +187,7 @@
         radial-gradient(circle at center, rgba(15,23,42,1) 0, rgba(15,23,42,0.2) 55%, transparent 100%);
       box-shadow:
         0 0 0 1px rgba(15,23,42,1),
-        0 0 30px rgba(248,113,113,0.6);
+        0 0 39px rgba(248,113,113,0.6);  /* 30 → 39 */
       position: relative;
       overflow: hidden;
       animation: vc-spin 26s linear infinite;
@@ -212,25 +212,25 @@
 
     .vc-compass-arrow {
       position: absolute;
-      width: 4px;
+      width: 5px;                        /* 4 → 5 */
       height: 60%;
       background: linear-gradient(to bottom, #f97373, #991b1b);
       border-radius: 999px;
       top: 10%;
       left: 50%;
       transform: translateX(-50%);
-      box-shadow: 0 0 14px rgba(248,113,113,0.7);
+      box-shadow: 0 0 18px rgba(248,113,113,0.7); /* 14 → 18 */
     }
 
     .vc-compass-arrow::after {
       content: "";
       position: absolute;
-      bottom: -14px;
+      bottom: -18px;                     /* -14 → -18 */
       left: 50%;
       transform: translateX(-50%);
       border-radius: 999px;
-      width: 14px;
-      height: 14px;
+      width: 18px;                       /* 14 → 18 */
+      height: 18px;
       border: 2px solid rgba(248,250,252,0.8);
       background: radial-gradient(circle, #0b1120, #020617);
     }
@@ -240,7 +240,7 @@
       inset: 10px;
       display: grid;
       place-items: center;
-      font-size: 10px;
+      font-size: 13px;                   /* 10 → 13 */
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.20em;
@@ -257,8 +257,8 @@
     .vc-compass-labels .w { left: 8px; opacity: 0.7; }
 
     .vc-compass-core {
-      width: 26px;
-      height: 26px;
+      width: 34px;                       /* 26 → 34 */
+      height: 34px;
       border-radius: 999px;
       border: 1px solid rgba(148,163,184,0.6);
       background: radial-gradient(circle, #020617, #111827);
@@ -272,7 +272,6 @@
       to   { transform: rotate(360deg); }
     }
 
-    /* Neliela peldēšana visam “kompasam” */
     @keyframes vc-float {
       0%   { transform: translateY(0px); }
       50%  { transform: translateY(-6px); }
@@ -285,8 +284,6 @@
 </head>
 
 <body class="vc-coming-body">
-  <!-- Vienkārša, neitrāla navigācija (pielāgo linkus/active klasi pēc vajadzības) -->
-  
 
   <main class="vc-coming-main">
     <section class="vc-coming-card">
@@ -296,7 +293,6 @@
           <span>Rīks nedarbojas</span>
         </div>
 
-        <!-- Šo rindu vari mainīt atkarībā no konkrētās sadaļas -->
         <h1 class="vc-coming-title">
           Rīks nav pieejams
         </h1>
@@ -305,17 +301,13 @@
         </p>
 
         <p class="vc-coming-text">
-         <!-- Šī sadaļa vēl tiek veidota, lai <strong>Virtuālais kompass</strong> kļūtu par pilnvērtīgu
-          mācību rīku. -->
         </p>
 
         <ul class="vc-coming-list">
           <li>Mēs pie tā strādājam. 🛠️</li>
-          
         </ul>
 
         <div class="vc-coming-actions">
-         
           <span class="vc-coming-hint">
             Kad rīks darbosies, šeit automātiski parādīsies saturs.
           </span>
@@ -328,7 +320,6 @@
 
       <div class="vc-compass-wrap" aria-hidden="true">
         <div class="vc-compass-ring">
-          
           <div class="vc-compass-labels">
             <span class="n">Z</span>
             <span class="e">A</span>
