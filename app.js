@@ -2473,6 +2473,41 @@ function injectDynamicPrintStyle(fmt, orient){
   const css = `
    @page { size:${pageSize}; margin:0; }
     html, body { margin:0 !important; padding:0 !important; background:#fff !important; }
+
+
+
+/* TEST-9: uzliekam drukas kartes izmēru jau PIRMS window.print(),
+   lai Leaflet invalidateSize() redz reālo drukas izmēru */
+body.print-mode #onlineMap{
+  position: fixed !important;
+  inset: 0 !important;
+  margin: auto !important;
+  width: ${mm.w}mm !important;
+  height: ${mm.h}mm !important;
+  transform: none !important;
+  display: block !important;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  overflow: hidden !important;
+}
+
+body.print-mode #onlineMap .leaflet-zoom-anim,
+body.print-mode #onlineMap .leaflet-zoom-animated{
+  transition: none !important;
+  animation: none !important;
+  will-change: auto !important;
+}
+
+
+
+
+
+
+
+
+
+
+	
     @media print {
       html, body { height:auto !important; overflow:hidden !important; }
       #resizeHandle{ display:none !important; }
