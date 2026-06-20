@@ -2301,9 +2301,8 @@ async function prepareMapForPrintLgIa(opts){
   map.options.zoomAnimation = false;
   map.options.fadeAnimation = false;
   map.options.markerZoomAnimation = false;
-	// TEST-6: atslēgts, lai pārbaudītu, vai print zoomForScale izraisa baltu Leaflet karti
-//  map.setZoom(zoomForScale(scale), { animate:false });
-//  if (typeof updateRatio === 'function') updateRatio();
+  map.setZoom(zoomForScale(scale), { animate:false });
+  if (typeof updateRatio === 'function') updateRatio();
 
   // 3) iesaldē #onlineMap px izmērus (kāpēc: izvairāmies no layout lēciena)
   const mapEl = document.getElementById('onlineMap');
