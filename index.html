@@ -2074,7 +2074,271 @@ body.preloading { overflow: hidden; }
 })();
 </script> -->
 
+<script>
+/* PRINT TILE HOTFIX TEST v1
+   Pagaida Leaflet online kartes flīzes pirms window.print().
+   Pagaidu ielāps GitHub testam. Pēc īstā labojuma app.js/src šo var dzēst.
+*/
+(function(){
+  'use strict';
 
+  if (window.__printTileHotfixV1) return;
+  window.__printTileHotfixV1 = true;
+
+  function injectPrintTileCSS(){
+    if (document.getElementById('printTileHotfixCSS')) return;
+
+    const st = document.createElement('style');
+    st.id = 'printTileHotfixCSS';
+    st.textContent = `
+      @media print {
+        body.print-mode #onlineMap .leaflet-pane,
+        body.print-mode #onlineMap .leaflet-map-pane,
+        body.print-mode #onlineMap .leaflet-tile-pane,
+        body.print-mode #onlineMap .leaflet-overlay-pane,
+        body.print-mode #onlineMap .leaflet-layer,
+        body.print-mode #onlineMap .leaflet-tile-container,
+        body.print-mode #onlineMap img.leaflet-tile,
+        body.print-mode #onlineMap img.leaflet-image-layer {
+          display: block !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+        }
+
+        body.print-mode #onlineMap img.leaflet-tile,
+        body.print-mode #onlineMap img.leaflet-image-layer {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        body.print-mode #onlineMap {
+          background: #fff !important;
+        }
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  function getMap(){
+    try {
+      if (typeof window.__getMap === 'function') {
+        const m = window.__getMap();
+        if (m && typeof m.invalidateSize === 'function') return m;
+      }
+      if (window.map && typeof window.map.invalidateSize === 'function') {
+        return window.map;
+      }
+    } catch(_) {}
+    return null;
+  }
+
+  function kickMapTiles(){
+    const map = getMap();
+    if (!map) return false;
+
+    try { map.invalidateSize(true); } catch(_) {}
+
+    try {
+      map.eachLayer(function(layer){
+        try {
+          if (layer && typeof layer.redraw === 'function') layer.redraw();
+        } catch(_) {}
+      });
+    } catch(_) {}
+
+    return true;
+  }
+
+  function waitForVisibleTiles(opts){
+    opts = opts || {};
+    const timeout  = Math.max(1000, Number(opts.timeout || 15000));
+    const settle   = Math.max(0, Number(opts.settle || 500));
+    const minTiles = Math.max(0, Number(opts.minTiles || 1));
+
+    const root = document.getElementById('onlineMap');
+
+    return new Promise(function(resolve){
+      if (!root) {
+        resolve({ reason:'no-onlineMap', total:0, pending:0 });
+        return;
+      }
+
+      const start = Date.now();
+      let lastChange = Date.now();
+      let rafId = 0;
+      let timeoutId = 0;
+
+      const seen = new Set();
+      const pending = new Set();
+
+      function isTile(img){
+        return img &&
+          img.tagName === 'IMG' &&
+          (
+            img.classList.contains('leaflet-tile') ||
+            img.classList.contains('leaflet-image-layer')
+          );
+      }
+
+      function isVisibleInMap(img){
+        try {
+          const rr = root.getBoundingClientRect();
+          const r = img.getBoundingClientRect();
+
+          return (
+            r.width > 0 &&
+            r.height > 0 &&
+            r.right > rr.left &&
+            r.left < rr.right &&
+            r.bottom > rr.top &&
+            r.top < rr.bottom
+          );
+        } catch(_) {
+          return false;
+        }
+      }
+
+      function isLoaded(img){
+        return !!(img && img.complete && img.naturalWidth > 0);
+      }
+
+      function onDone(e){
+        const img = e.currentTarget || e.target;
+        pending.delete(img);
+        lastChange = Date.now();
+      }
+
+      function arm(img){
+        if (!isTile(img)) return;
+        if (!isVisibleInMap(img)) return;
+        if (seen.has(img)) return;
+
+        seen.add(img);
+        lastChange = Date.now();
+
+        if (isLoaded(img)) return;
+
+        pending.add(img);
+        img.addEventListener('load', onDone, { once:true });
+        img.addEventListener('error', onDone, { once:true });
+      }
+
+      function collect(){
+        try {
+          root
+            .querySelectorAll('img.leaflet-tile, img.leaflet-image-layer')
+            .forEach(arm);
+        } catch(_) {}
+      }
+
+      const mo = new MutationObserver(function(muts){
+        muts.forEach(function(m){
+          m.addedNodes && m.addedNodes.forEach(function(n){
+            if (isTile(n)) arm(n);
+
+            if (n && n.querySelectorAll) {
+              n
+                .querySelectorAll('img.leaflet-tile, img.leaflet-image-layer')
+                .forEach(arm);
+            }
+          });
+        });
+      });
+
+      function cleanup(){
+        try { mo.disconnect(); } catch(_) {}
+        if (rafId) cancelAnimationFrame(rafId);
+        if (timeoutId) clearTimeout(timeoutId);
+
+        pending.forEach(function(img){
+          try { img.removeEventListener('load', onDone); } catch(_) {}
+          try { img.removeEventListener('error', onDone); } catch(_) {}
+        });
+        pending.clear();
+      }
+
+      function done(reason){
+        const result = {
+          reason: reason,
+          total: seen.size,
+          pending: pending.size
+        };
+        cleanup();
+        resolve(result);
+      }
+
+      function tick(){
+        collect();
+
+        const hasEnoughTiles = seen.size >= minTiles;
+        const settled = (Date.now() - lastChange) >= settle;
+
+        if (hasEnoughTiles && pending.size === 0 && settled) {
+          done('ready');
+          return;
+        }
+
+        rafId = requestAnimationFrame(tick);
+      }
+
+      try {
+        mo.observe(root, { childList:true, subtree:true });
+      } catch(_) {}
+
+      collect();
+      timeoutId = setTimeout(function(){
+        done('timeout');
+      }, timeout);
+
+      tick();
+    });
+  }
+
+  const nativePrint = window.print.bind(window);
+  let insideHotfixPrint = false;
+
+  window.print = async function(){
+    const inPrintMode = document.body && document.body.classList.contains('print-mode');
+    const onlineMap = document.getElementById('onlineMap');
+
+    if (insideHotfixPrint || !inPrintMode || !onlineMap) {
+      return nativePrint();
+    }
+
+    insideHotfixPrint = true;
+
+    try {
+      injectPrintTileCSS();
+
+      kickMapTiles();
+
+      await new Promise(function(resolve){
+        requestAnimationFrame(function(){
+          requestAnimationFrame(resolve);
+        });
+      });
+
+      const result = await waitForVisibleTiles({
+        timeout: 15000,
+        settle: 500,
+        minTiles: 1
+      });
+
+      console.info('[print-tile-hotfix] before native print:', result);
+
+    } catch (e) {
+      console.warn('[print-tile-hotfix] turpinu drukāšanu pēc kļūdas:', e);
+    } finally {
+      insideHotfixPrint = false;
+      return nativePrint();
+    }
+  };
+
+  injectPrintTileCSS();
+
+  console.info('[print-tile-hotfix] active');
+})();
+</script>
 <!-- HELP FAB (peldošā poga) -->
 <button id="helpFab" aria-label="Palīdzība" title="Palīdzība (H)">?</button>
 	
