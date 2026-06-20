@@ -2381,6 +2381,7 @@ await new Promise(r => requestAnimationFrame(r));
   map.panBy([ (sz2.x * 0.5 - p2.x), (sz2.y * 0.5 - p2.y) ], { animate:false });
 }
 
+	  
 // gaidām flīzes, drukājam
     __showPrintGuardOverlay('Gatavojam karti drukai…');
     await waitForMapToRender(map, { timeout: 12000, settle: 200 });
