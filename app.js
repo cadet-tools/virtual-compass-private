@@ -2487,7 +2487,7 @@ function injectDynamicPrintStyle(fmt, orient){
         transform: none !important;
         display: block !important;
         page-break-inside: avoid; break-inside: avoid;
-		/*overflow: hidden !important;*/ /* Kartei OBLIGĀTI hidden, lai nogrieztu flīzes */
+		overflow: hidden !important; /* Kartei OBLIGĀTI hidden, lai nogrieztu flīzes */
       }
       #onlineMap .leaflet-zoom-anim,
       #onlineMap .leaflet-zoom-animated{
