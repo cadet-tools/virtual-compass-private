@@ -1,0 +1,2104 @@
+<!doctype html>
+<html lang="lv">
+<head>
+  <meta charset="utf-8" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+
+
+<script>
+	/*  VH mainīgais   */
+(function(){
+  function setVH(){
+    var h = (window.visualViewport ? visualViewport.height : window.innerHeight) || window.innerHeight;
+    document.documentElement.style.setProperty('--vh', (h * 0.01) + 'px');
+  }
+  setVH();
+  addEventListener('resize', setVH, {passive:true});
+  if (window.visualViewport){
+    visualViewport.addEventListener('resize', setVH, {passive:true});
+    visualViewport.addEventListener('scroll', setVH, {passive:true});
+  }
+})();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+<script>
+/* ==============================================================
+   DEVTOOL V1 — compact, early-capture, one-file, safe
+   Ievieto PATS PIRMAIS (head vai uzreiz pēc <body>).
+   ============================================================== */
+(function(){
+  'use strict';
+  try {
+
+  /* ====== Early buffer & helpers ====== */
+  const T0 = (performance && performance.timeOrigin) || Date.now();
+  const pad = n => (n<10 ? '0'+n : ''+n);
+  const ts  = () => {
+    const ms = Math.max(0, Math.round(performance.now ? performance.now() : (Date.now()-T0)));
+    const s = Math.floor(ms/1000), m = Math.floor(s/60), rems = s%60;
+    return `[${pad(m)}:${pad(rems)}.${(ms%1000+'').padStart(3,'0')}]`;
+  };
+
+  const ringMax = 2000;
+  const buf = [];
+  let ERR=0, WRN=0, LOG=0, INF=0, DBG=0;
+
+  function safeString(v){
+    try{
+      if (typeof v === 'string') return v;
+      if (v instanceof Error) return (v.stack || (v.name+': '+v.message));
+      return JSON.stringify(v);
+    } catch(_){ return String(v); }
+  }
+  function lineJoin(args){ return args.map(safeString).join(' '); }
+
+  /* ====== UI state ====== */
+  const LS = {
+    OPEN:'dt.open', POS:'dt.pos', SIZE:'dt.size',
+    LOCK:'dt.lock', PAUSE:'dt.pause', HOOK:'dt.hook', AUTO:'dt.auto'
+  };
+  const els = { btn:null, panel:null, body:null, lock:null, pause:null };
+  let autoOpen = true;
+
+  /* ====== CSS inject (button + panel) ====== */
+  (function injectCSS(){
+    const css = `
+#dtToggle{
+  position:fixed; right:12px; bottom:var(--dock-bottom,35px);
+  width:44px; height:44px; border-radius:12px; display:grid; place-items:center;
+  border:1px solid rgba(255,255,255,.16);
+  background:linear-gradient(180deg,#1b1f25,#2a0f0faa);
+  box-shadow:0 10px 24px rgba(0,0,0,.55); color:#fff; font:20px/1 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  cursor:pointer; z-index:2147483647; -webkit-tap-highlight-color:transparent; user-select:none; pointer-events:auto;
+}
+#dtToggle::after{
+  content: attr(data-badge);
+  position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 4px;
+  background:#E53935; color:#fff; border-radius:10px; border:1px solid #fff3;
+  font:11px/18px ui-monospace,Menlo,Consolas,monospace; text-align:center;
+}
+#dtPanel{
+  position:fixed; right:64px; bottom:var(--dock-bottom,35px);
+  width:380px; max-width:96vw; max-height:60vh; min-height:140px;
+  display:none; flex-direction:column; overflow:hidden; resize:both;
+  border-radius:14px; border:1px solid rgba(255,255,255,.08);
+  background:linear-gradient(180deg,#1b1f25,#2a0f0faa); color:#eef2f7;
+  box-shadow:0 16px 40px rgba(0,0,0,.55); z-index:2147483647; backdrop-filter:saturate(1.2) blur(8px);
+}
+#dtPanel.open{ display:flex; }
+#dtPanel .bar{
+  display:flex; align-items:center; gap:8px; padding:8px 10px; user-select:none; cursor:move;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0));
+}
+#dtPanel .bar .t{ font-size:13px; letter-spacing:.2px; }
+#dtPanel .bar .sp{ flex:1; }
+#dtPanel .bar button,
+#dtPanel .foot button, #dtPanel .foot label{
+  appearance:none; border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.08); color:#fff; border-radius:8px; padding:4px 8px; font-size:12px; cursor:pointer;
+}
+#dtPanel .bar button:hover,
+#dtPanel .foot button:hover{ background:rgba(255,255,255,.14); }
+#dtPanel .body{
+  flex:1 1 auto; overflow:auto; padding:10px;
+  font:12px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  white-space:pre-wrap; word-break:break-word;
+}
+#dtPanel .foot{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:8px; border-top:1px solid rgba(255,255,255,.06); }
+#dtPanel input[type=checkbox]{ transform:translateY(1px); }
+@media (max-width:760px){
+  #dtPanel{ right:10px; width:92vw; max-height:62vh; }
+  #dtToggle{ right:10px; }
+}
+
+
+/* === Touch uzvedība === */
+#dtPanel .bar{ 
+  touch-action: none;          /* ļauj vilkt paneli bez lapas scroll */
+}
+
+#dtPanel .bar button,
+#dtPanel .foot button,
+#dtPanel .foot label,
+#dtToggle{
+  touch-action: manipulation;  /* ātrs tap, bez 300ms aiztures/double-tap zoom */
+}
+
+/* Lielāks “tap targets” uz mobilajām */
+#dtPanel .bar button,
+#dtPanel .foot button,
+#dtPanel .foot label{
+  min-width: 36px;
+  min-height: 32px;
+  line-height: 1;
+}`;
+    const st = document.createElement('style');
+    st.textContent = css;
+    (document.head || document.documentElement).appendChild(st);
+  })();
+
+  /* ====== Console hook (early) ====== */
+  const orig = {
+    log: console.log, warn: console.warn, error: console.error,
+    info: console.info, debug: console.debug
+  };
+  let hooked = true;
+  function bumpBadge(){
+    if (!els.btn) return;
+    const b = `E:${ERR}${WRN?` W:${WRN}`:''}`;
+    els.btn.setAttribute('data-badge', (ERR||WRN) ? b : '');
+  }
+  function appendLine(line){
+    if (!els.body) return;
+    if (els.pause && els.pause.checked) return;
+    const atBottom = els.lock && els.lock.checked
+      ? (els.body.scrollTop + els.body.clientHeight >= els.body.scrollHeight - 4) : false;
+    els.body.appendChild(document.createTextNode(line+'\n'));
+    if (els.lock && els.lock.checked || atBottom) els.body.scrollTop = els.body.scrollHeight;
+  }
+  function push(kind, args){
+    const line = `${ts()} ${kind} ${lineJoin(args)}`;
+    if (buf.length >= ringMax) buf.shift();
+    buf.push(line);
+    if (kind==='ERR') ERR++; else if (kind==='WRN') WRN++; else if (kind==='LOG') LOG++;
+    else if (kind==='INF') INF++; else if (kind==='DBG') DBG++;
+    bumpBadge();
+    if (els.body) appendLine(line);
+    if (autoOpen && kind==='ERR') openPanel();
+  }
+  function hookConsole(){
+    if (hooked) return; hooked = true;
+    console.log   = function(){ try{ push('LOG', [...arguments]); }catch(_){ } return orig.log.apply(console, arguments); };
+    console.warn  = function(){ try{ push('WRN', [...arguments]); }catch(_){ } return orig.warn.apply(console, arguments); };
+    console.error = function(){ try{ push('ERR', [...arguments]); }catch(_){ } return orig.error.apply(console, arguments); };
+    console.info  = function(){ try{ push('INF', [...arguments]); }catch(_){ } return orig.info.apply(console, arguments); };
+    console.debug = function(){ try{ push('DBG', [...arguments]); }catch(_){ } return orig.debug.apply(console, arguments); };
+  }
+  function unhookConsole(){
+    if (!hooked) return; hooked = false;
+    console.log=orig.log; console.warn=orig.warn; console.error=orig.error; console.info=orig.info; console.debug=orig.debug;
+  }
+  // start capture immediately
+  hookConsole();
+
+  /* ====== Global error/resource/rejection ====== */
+  window.addEventListener('error',  e => push('ERR', [e.message, '@', e.filename+':'+e.lineno+':'+e.colno]));
+  window.addEventListener('unhandledrejection', e => {
+    const r = e && e.reason;
+    push('ERR', ['UnhandledPromise', r && (r.stack||r.message||String(r))]);
+  });
+  document.addEventListener('error', e=>{
+    const el = e.target || {};
+    const tag = el.tagName || '?';
+    if (tag==='IMG'||tag==='SCRIPT'||tag==='LINK'){
+      const src = el.currentSrc || el.src || el.href || '(nav)';
+      push('ERR', [`Resursa kļūda <${tag.toLowerCase()}>:`, src]);
+    }
+  }, true);
+
+  /* ====== Performance observers (buffered) ====== */
+  try{
+    if (window.PerformanceObserver){
+      new PerformanceObserver(list=>{
+        for (const e of list.getEntries()) push('INF', ['paint', e.name, Math.round(e.startTime)+'ms']);
+      }).observe({type:'paint', buffered:true});
+
+      let cls=0;
+      new PerformanceObserver(list=>{
+        for (const e of list.getEntries()) if (!e.hadRecentInput) cls += e.value;
+        push('INF', ['CLS', cls.toFixed(3)]);
+      }).observe({type:'layout-shift', buffered:true});
+
+      const lcpObs = new PerformanceObserver(list=>{
+        const last = list.getEntries().pop();
+        if (last) push('INF', ['LCP', Math.round(last.startTime)+'ms']);
+      });
+      lcpObs.observe({type:'largest-contentful-paint', buffered:true});
+      addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='hidden') try{ lcpObs.disconnect(); }catch(_){} });
+
+      new PerformanceObserver(list=>{
+        const e=list.getEntries()[0]; if (e) push('INF', ['FID', Math.round(e.processingStart - e.startTime)+'ms']);
+      }).observe({type:'first-input', buffered:true});
+
+      new PerformanceObserver(list=>{
+        if (list.getEntries().length) push('WRN', ['LongTasks', list.getEntries().length]);
+      }).observe({type:'longtask', buffered:true});
+    }
+    setTimeout(()=>{
+      try{
+        const nav = performance.getEntriesByType('navigation')[0];
+        if (nav){
+          const data = {
+            type: nav.type,
+            ttfb: Math.round(nav.responseStart),
+            domInteractive: Math.round(nav.domInteractive),
+            domContentLoaded: Math.round(nav.domContentLoadedEventEnd),
+            loadEventEnd: Math.round(nav.loadEventEnd)
+          };
+          push('INF', ['navigation', JSON.stringify(data)]);
+        }
+      }catch(_){}
+    },0);
+  }catch(_){}
+
+  /* ====== Simple XHR/fetch tap (lightweight) ====== */
+  (function tapFetchXHR(){
+    const _fetch = window.fetch;
+    if (_fetch){
+      window.fetch = function(){
+        const url = arguments[0] && arguments[0].url ? arguments[0].url : String(arguments[0]);
+        push('INF', ['fetch→', url]);
+        return _fetch.apply(this, arguments).then(res=>{
+          push(res.ok?'INF':'WRN', ['fetch←', res.status, url]);
+          return res;
+        }).catch(err=>{ push('ERR', ['fetch✖', url, err && err.message]); throw err; });
+      };
+    }
+    const XHR = window.XMLHttpRequest;
+    if (XHR){
+      const open = XHR.prototype.open, send = XHR.prototype.send;
+      XHR.prototype.open = function(m,u){ this.__dt_url = u; return open.apply(this, arguments); };
+      XHR.prototype.send = function(){
+        const url=this.__dt_url||'?'; push('INF', ['xhr→', url]);
+        this.addEventListener('load', ()=>push((this.status>=200&&this.status<400)?'INF':'WRN',['xhr←',this.status,url]));
+        this.addEventListener('error',()=>push('ERR',['xhr✖',url]));
+        return send.apply(this, arguments);
+      };
+    }
+  })();
+
+  /* ====== UI build (after body exists) ====== */
+  function ensureUI(){
+    if (els.btn && els.panel) return;
+    if (!document.body) { setTimeout(ensureUI, 0); return; }
+
+    // toggle button
+    const btn = document.createElement('button');
+    btn.id='dtToggle'; btn.type='button'; btn.title='DevTool'; btn.textContent='🛠';
+    Object.assign(btn.style,{
+      position:'fixed', right:'12px', bottom:'35px', display:'grid',
+      zIndex:2147483647, pointerEvents:'auto', opacity:'1', visibility:'visible'
+    });
+    document.body.appendChild(btn);
+    els.btn = btn;
+
+    // panel
+    const panel = document.createElement('div');
+    panel.id='dtPanel';
+    panel.innerHTML = `
+      <div class="bar" id="dtBar">
+        <span class="t">DevTool</span><span class="sp"></span>
+        <button data-act="clear">Notīrīt</button>
+        <button data-act="min">Min</button>
+        <button data-act="close">✖</button>
+      </div>
+      <div class="body" id="dtBody"></div>
+      <div class="foot">
+        <button id="dtCopy">Kopēt atskaiti</button>
+        <button id="dtDl">Lejupielādēt .txt</button>
+        <label><input type="checkbox" id="dtLock" checked> Scroll-lock</label>
+        <label><input type="checkbox" id="dtPause"> Pauze</label>
+        <label><input type="checkbox" id="dtHook" checked> Ķert console</label>
+        <label><input type="checkbox" id="dtAuto" checked> Auto-atvērt pie kļūdas</label>
+      </div>`;
+    document.body.appendChild(panel);
+    els.panel = panel;
+    els.body  = panel.querySelector('#dtBody');
+    els.lock  = panel.querySelector('#dtLock');
+    els.pause = panel.querySelector('#dtPause');
+
+    // restore state
+    try{
+      const pos  = JSON.parse(localStorage.getItem(LS.POS)||'null');
+      const size = JSON.parse(localStorage.getItem(LS.SIZE)||'null');
+      const open = localStorage.getItem(LS.OPEN)==='1';
+      const lock = localStorage.getItem(LS.LOCK)!=='0';
+      const pause= localStorage.getItem(LS.PAUSE)==='1';
+      const hook = localStorage.getItem(LS.HOOK)!=='0';
+      autoOpen   = localStorage.getItem(LS.AUTO)!=='0';
+
+      if (size && size.w && size.h){ panel.style.width=size.w+'px'; panel.style.height=size.h+'px'; }
+      if (pos && pos.r!=null && pos.b!=null){ panel.style.right=pos.r+'px'; panel.style.bottom=pos.b+'px'; }
+      if (open) panel.classList.add('open');
+      els.lock.checked  = lock;
+      els.pause.checked = pause;
+      panel.querySelector('#dtHook').checked = hook;
+      panel.querySelector('#dtAuto').checked = autoOpen;
+      if (!hook) unhookConsole();
+    }catch(_){}
+
+    // wire controls
+    btn.addEventListener('click', ()=>{ panel.classList.toggle('open'); saveState(); });
+    panel.querySelector('[data-act="close"]').addEventListener('click', ()=>{ panel.classList.remove('open'); saveState(); });
+    panel.querySelector('[data-act="min"]').addEventListener('click', ()=>{
+      const h = parseInt(panel.style.height||'0',10);
+      panel.style.height = (h && h<120) ? '' : '38px'; saveState();
+    });
+    panel.querySelector('[data-act="clear"]').addEventListener('click', ()=>{ els.body.textContent=''; });
+
+  // drag by bar — Pointer Events + ignorē interaktīvos elementus
+(function drag(){
+  const bar = panel.querySelector('#dtBar');
+  let dragging = false, startX = 0, startY = 0, startR = 0, startB = 0, pid = null;
+
+  function onPointerDown(e){
+    // tikai primārais klikšķis / pieskāriens
+    if (e.button !== undefined && e.button !== 0) return;
+    // NEvilkt, ja tap uz pogas/label/link/input utt.
+    if (e.target.closest('button, input, select, textarea, a, label')) return;
+
+    dragging = true;
+    pid = e.pointerId || null;
+    try { if (pid != null) bar.setPointerCapture(pid); } catch(_){}
+
+    startX = e.clientX; startY = e.clientY;
+    const cs = getComputedStyle(panel);
+    startR = parseFloat(cs.right); 
+    startB = parseFloat(cs.bottom);
+
+    e.preventDefault(); // bloķē lapas scroll teknes laikā
+  }
+
+  function onPointerMove(e){
+    if (!dragging) return;
+    if (pid != null && e.pointerId !== pid) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    panel.style.right  = (startR - dx) + 'px';
+    panel.style.bottom = (startB - dy) + 'px';
+  }
+
+  function onPointerUp(e){
+    if (!dragging) return;
+    if (pid != null && e.pointerId !== pid) return;
+    dragging = false;
+    try { if (pid != null) bar.releasePointerCapture(pid); } catch(_){}
+    pid = null;
+    saveState();
+  }
+
+  bar.addEventListener('pointerdown', onPointerDown);
+  bar.addEventListener('pointermove', onPointerMove, { passive: false });
+  bar.addEventListener('pointerup', onPointerUp);
+  bar.addEventListener('pointercancel', onPointerUp);
+})();
+
+
+    // persist size
+    if (window.ResizeObserver){
+      new ResizeObserver(()=>saveState()).observe(panel);
+    }
+
+    // checkboxes
+    els.lock.addEventListener('change', ()=> localStorage.setItem(LS.LOCK, els.lock.checked?'1':'0'));
+    els.pause.addEventListener('change',()=> localStorage.setItem(LS.PAUSE,els.pause.checked?'1':'0'));
+    panel.querySelector('#dtHook').addEventListener('change', e=>{
+      localStorage.setItem(LS.HOOK, e.target.checked?'1':'0');
+      e.target.checked ? hookConsole() : unhookConsole();
+    });
+    panel.querySelector('#dtAuto').addEventListener('change', e=>{
+      autoOpen = !!e.target.checked;
+      localStorage.setItem(LS.AUTO, autoOpen?'1':'0');
+    });
+
+    // copy & download
+    panel.querySelector('#dtCopy').addEventListener('click', async ()=>{
+      const text = buildReport();
+      try{
+        if (navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); alert('Atskaite nokopēta.'); }
+        else { const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+               document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); alert('Atskaite nokopēta.'); }
+      }catch(e){ alert('Neizdevās kopēt: '+e.message); }
+    });
+    panel.querySelector('#dtDl').addEventListener('click', ()=>{
+      const blob = new Blob([buildReport()], {type:'text/plain'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = 'devtool-report.txt'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    });
+
+    // flush buffered lines
+    buf.forEach(appendLine);
+    bumpBadge();
+  }
+  function openPanel(){ ensureUI(); els.panel && els.panel.classList.add('open'); saveState(); }
+  function saveState(){
+    if (!els.panel) return;
+    try{
+      const cs=getComputedStyle(els.panel);
+      localStorage.setItem(LS.OPEN, els.panel.classList.contains('open')?'1':'0');
+      localStorage.setItem(LS.SIZE, JSON.stringify({ w: parseInt(els.panel.style.width||els.panel.offsetWidth,10), h: parseInt(els.panel.style.height||els.panel.offsetHeight,10) }));
+      localStorage.setItem(LS.POS,  JSON.stringify({ r: parseFloat(cs.right), b: parseFloat(cs.bottom) }));
+    }catch(_){}
+  }
+  function buildReport(){
+    const hdr = [
+      '=== DevTool Report ===',
+      'Time: ' + new Date().toISOString(),
+      'URL:  ' + location.href,
+      'UA:   ' + navigator.userAgent,
+      `Counts: ERR=${ERR} WRN=${WRN} LOG=${LOG} INF=${INF} DBG=${DBG}`,
+      '----------------------'
+    ].join('\n');
+    return hdr+'\n'+buf.join('\n')+'\n';
+  }
+
+  // mark lifecycle
+  document.addEventListener('readystatechange', ()=>push('INF',['readyState=',document.readyState]));
+  addEventListener('DOMContentLoaded', ()=>push('INF',['DOMContentLoaded']));
+  addEventListener('load', ()=>push('INF',['window.load']));
+
+  // show UI as soon as body exists
+  ensureUI();
+
+  } catch (fatal) {
+    try { console.error('[DevTool fatal]', fatal); } catch(_){}
+  }
+})();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script>
+	// tests layerctl 
+(function(){
+  window.__probeLayers = function(layersCtl){
+    try{
+      const root = layersCtl && (layersCtl._container || layersCtl._containerEl || null);
+      if (!root) { console.warn('[layers-probe] nav container'); return; }
+      const link = layersCtl._layersLink || root.querySelector('.leaflet-control-layers-toggle');
+
+      const short = el => {
+        if (!el) return '∅';
+        let s = (el.tagName||'').toLowerCase();
+        if (el.id) s += '#'+el.id;
+        if (el.className) s += '.'+String(el.className).trim().replace(/\s+/g,'.');
+        return s;
+      };
+      const types = ['pointerdown','pointerup','pointercancel','touchstart','touchend','mousedown','mouseup','click','contextmenu','keydown','keyup'];
+      const log = (e, phase) => {
+        console.info('[layers]', {type:e.type, phase, defaultPrevented:e.defaultPrevented, pointerType:e.pointerType, button:e.button, buttons:e.buttons},
+          'target=', short(e.target), 'open=', root.classList.contains('leaflet-control-layers-expanded'));
+      };
+
+      // capture (pirms citiem) + bubble
+      types.forEach(t=>{
+        const cap = /^(pointerdown|touchstart|mousedown)$/.test(t);
+        root.addEventListener(t, e=>log(e, cap?'CAP':'BUB'), {capture:cap, passive:false});
+        if (link) link.addEventListener(t, e=>console.debug('[layers] toggle', t, '→', short(e.target)), {passive:false});
+      });
+
+      // izseko expand/collapse izsaukumus
+      const exp = layersCtl.expand   || layersCtl._expand;
+      const col = layersCtl.collapse || layersCtl._collapse;
+      if (exp) layersCtl.expand = function(){ console.info('[layers] expand()'); return exp.apply(this, arguments); };
+      if (col) layersCtl.collapse = function(){ console.info('[layers] collapse()'); return col.apply(this, arguments); };
+
+      // klases maiņa
+      const mo = new MutationObserver(ms=>{
+        ms.forEach(m=>{
+          if (m.type==='attributes' && m.attributeName==='class'){
+            const open = root.classList.contains('leaflet-control-layers-expanded');
+            console.info('[layers] state =', open ? 'OPEN' : 'CLOSED');
+          }
+        });
+      });
+      mo.observe(root, {attributes:true});
+      console.info('[layers] probe attached');
+    }catch(err){ console.error('[layers-probe fatal]', err); }
+  };
+})();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+
+
+<script>
+/* ========== Legacy browser brīdinājums – vienkāršs teksts, vienādas pogas ========== */
+(function () {
+  // Sliekšņi: viss ZEM šiem tiks brīdināts
+  var MIN_CHROME  = 90;   // Chrome / Chromium / CriOS
+  var MIN_EDGE    = 90;   // Chromium Edge (Edg/)
+  var MIN_FIREFOX = 90;   // Firefox
+  // Legacy EdgeHTML (Edge/12–18) – vienmēr brīdinām
+
+  function onDomReady(fn){
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', fn, false);
+    } else { fn(); }
+  }
+
+  function getBrowserInfo(){
+    var ua = navigator.userAgent || '';
+    var m;
+    // Legacy Edge (EdgeHTML)
+    m = ua.match(/\bEdge\/(\d+)/);
+    if (m) return { name:'Edge (Legacy)', major: parseInt(m[1],10)||0, engine:'edgehtml', site:'https://www.microsoft.com/edge' };
+    // Chromium Edge
+    m = ua.match(/\bEdg(?:A|iOS)?\/(\d+)/);
+    if (m) return { name:'Edge', major: parseInt(m[1],10)||0, engine:'chromium', site:'https://www.microsoft.com/edge' };
+    // Chrome/Chromium/CriOS
+    m = ua.match(/(?:HeadlessChrome|Chrom(?:e|ium)|CriOS)\/(\d+)/);
+    if (m) return { name:'Chrome', major: parseInt(m[1],10)||0, engine:'chromium', site:'https://www.google.com/chrome/' };
+    // Firefox
+    m = ua.match(/\bFirefox\/(\d+)/);
+    if (m) return { name:'Firefox', major: parseInt(m[1],10)||0, engine:'gecko', site:'https://www.mozilla.org/firefox/new/' };
+    return { name:'Nezināms pārlūks', major:0, engine:'other', site:'https://browsehappy.com/' };
+  }
+
+  function detectMissingFeatures() {
+    var missing = [];
+    if (!window.Promise) missing.push('Promise');
+    if (!(window.Promise && Promise.allSettled)) missing.push('Promise.allSettled');
+    if (!window.fetch) missing.push('fetch');
+    try { new URL('https://example.com'); } catch (_e) { missing.push('URL'); }
+    if (!('IntersectionObserver' in window)) missing.push('IntersectionObserver');
+    if (!('requestIdleCallback' in window)) missing.push('requestIdleCallback');
+    if (!('Map' in window)) missing.push('Map');
+    if (!('assign' in Object)) missing.push('Object.assign');
+    if (!('from' in Array)) missing.push('Array.from');
+    return missing;
+  }
+
+  function shouldWarn() {
+    var b = getBrowserInfo();
+    var old = false;
+
+    if (b.engine === 'edgehtml') {
+      old = true;
+    } else if (b.engine === 'chromium') {
+      if (b.name === 'Edge') old = b.major && b.major < MIN_EDGE;
+      else                   old = b.major && b.major < MIN_CHROME;
+    } else if (b.engine === 'gecko') {
+      old = b.major && b.major < MIN_FIREFOX;
+    }
+
+    var missing = detectMissingFeatures();
+    // Rādam, ja pārlūks vecs VAI pietrūkst vismaz 2 svarīgas iespējas
+    var show = old || (missing.length >= 2);
+
+    return { show: show, missing: missing, browser: b, old: old };
+  }
+
+  function injectScopedCSS(){
+    if (document.getElementById('legacy-warn-css')) return;
+    var css =
+      '#legacyWarnBackdrop{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:3vh 2vw;background:rgba(0,0,0,.55)}' +
+      '@supports ((backdrop-filter:blur(8px)) or (-webkit-backdrop-filter:blur(8px))){#legacyWarnBackdrop{backdrop-filter:saturate(1.2) blur(8px);-webkit-backdrop-filter:saturate(1.2) blur(8px)}}' +
+      '#legacyWarnBackdrop .uploader-card{min-width:320px;max-width:92vw;background:linear-gradient(180deg,#1b1f25 0%, #2a0f0faa 100%);color:#eef2f7;border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.55);padding:14px}' +
+      '#legacyWarnBackdrop h3{margin:0 0 6px;font:700 16px/1.25 system-ui,-apple-system,Segoe UI,Roboto,Arial}' +
+      '#legacyWarnBackdrop .divider{height:1px;margin:10px 0;border:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent)}' +
+      '#legacyWarnText{font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial;opacity:.95;margin:8px 0}' +
+      '#legacyWarnList{margin:8px 0 0 18px;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial;opacity:.9}' +
+      '#legacyWarnList li{margin:4px 0}' +
+      '#legacyWarnBackdrop .uploader-actions{display:flex;justify-content:space-between;margin-top:12px}' +
+      '#legacyWarnBackdrop .uploader-actions .btn{display:inline-block;text-align:center;border:2px solid; border-radius:10px; padding:10px 18px; font:700 13px/1 system-ui,-apple-system,Segoe UI,Roboto,Arial; color:#fff; box-shadow:inset 0 0 0 1px #ffffff10,0 8px 20px rgba(0,0,0,.35); cursor:pointer; -webkit-tap-highlight-color:transparent}' +
+      '#legacyUpdate{width:48%;max-width:260px;min-width:160px;border-color:#11cb1e;background:#0d631d}' +
+      '#legacyUpdate:hover{filter:brightness(1.12);background:#117a26}' +
+      '#legacyClose{width:48%;max-width:260px;min-width:160px;border-color:#ff0000;background:#791905}' +
+      '#legacyClose:hover{filter:brightness(1.10);background:#c02400}' +
+      '@media (min-width: 992px){#legacyWarnBackdrop .uploader-card{width:clamp(560px,48vw,760px)}}';
+    var el = document.createElement('style');
+    el.id = 'legacy-warn-css';
+    el.type = 'text/css';
+    el.appendChild(document.createTextNode(css));
+    (document.head || document.documentElement).appendChild(el);
+  }
+
+  function showLegacyBrowserWarning(info) {
+    if (document.getElementById('legacyWarnBackdrop')) return;
+
+    injectScopedCSS();
+
+    var b = info.browser || {name:'Pārlūks', major:0, site:'https://browsehappy.com/'};
+    var wrap = document.createElement('div');
+    wrap.id = 'legacyWarnBackdrop';
+
+    var headline = 'Jūsu pārlūks ir novecojis!';
+    var sub = b.major ? ('Konstatēts: ' + b.name + ' ' + b.major) : b.name;
+
+    // Vienkāršs, skaidri salasāms teksts (bez “drop” bloka)
+    var html =
+      '<div class="uploader-card" role="dialog" aria-labelledby="legacyWarnTitle" aria-describedby="legacyWarnText">' +
+        '<h3 id="legacyWarnTitle">' + headline + '</h3>' +
+        '<hr class="divider">' +
+        '<p style="margin-top:4px"><b>' + sub + '</b></p>' +
+        '<p id="legacyWarnText">' +
+          'Dažas rīka funkcijas un vizualie noformējumi šajā pārlūka versijā var nedarboties pilnvērtīgi. ' +
+          'Lai izmantotu visu funkcionalitāti, lūdzu, atjauniniet pārlūku.' +
+        '</p>' +
+        '<ul id="legacyWarnList">' +
+          '<li>PDF importēšana</li>' +
+          '<li>Tiešsaistes karte un režģi</li>' +
+          '<li>Vizuālais noformējums un veiktspēja</li>' +
+        '</ul>' +
+        '<div class="uploader-actions">' +
+          '<button id="legacyUpdate" class="btn" type="button">Atjaunināt pārlūku</button>' +
+          '<button id="legacyClose"  class="btn" type="button">Turpināt</button>' +
+        '</div>' +
+      '</div>';
+
+    wrap.innerHTML = html;
+    document.body.appendChild(wrap);
+
+    var upd = document.getElementById('legacyUpdate');
+    if (upd) {
+      upd.addEventListener('click', function () {
+        var url = b.site || 'https://browsehappy.com/';
+        try { window.open(url, '_blank', 'noopener'); } catch (_e) { location.href = url; }
+      }, false);
+    }
+    var closeBtn = document.getElementById('legacyClose');
+    function closeWarn(){ try { document.body.removeChild(wrap); } catch (_e) {} }
+    if (closeBtn) closeBtn.addEventListener('click', closeWarn, false);
+    wrap.addEventListener('click', function (e) { if (e.target === wrap) closeWarn(); }, false);
+    document.addEventListener('keydown', function esc(e){
+      if (e.key === 'Escape' || e.keyCode === 27) { closeWarn(); document.removeEventListener('keydown', esc, false); }
+    }, false);
+  }
+
+  onDomReady(function () {
+    // testa režīms: ?legacytest=1 – piespiedu brīdinājums
+    var test = false;
+    try { test = /\blegacytest=1\b/.test(location.search); } catch (_e) {}
+
+    // nerādām 2x vienā sesijā (ja vien nav tests)
+   // try { if (!test && sessionStorage.getItem('legacyWarnShown') === '1') return; } catch (_e) {}
+
+    var res = shouldWarn();
+    if (res.show || test) {
+      showLegacyBrowserWarning(res);
+     // try { sessionStorage.setItem('legacyWarnShown', '1'); } catch (_e) {}
+    }
+  });
+})();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+<!-- PDF.js 3.x (ļoti stabila) -->
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    console.log("PDF.js OK?", !!window.pdfjsLib, pdfjsLib.version);
+  } else {
+    console.warn("PDF.js nav ielādējies (CDN bloķēts/404).");
+  }
+</script>
+
+
+
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <title>CADET.LV Interaktīvais kompass © Jānis Eglis</title>
+
+  <!-- Trešo pušu CSS vispirms -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+
+
+
+
+
+
+  <!-- Tavs CSS pēc tam, lai var pārrakstīt -->
+  <link rel="stylesheet" href="style.css?v=2025-09-29-01">
+
+  <!-- (pēc vajadzības) vieta JS ģenerētiem stiliem -->
+  <style id="runtime-styles"></style>
+
+  <!-- Leaflet JS pirms tava koda -->
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+
+
+
+
+
+
+
+
+	
+<!-- Tikai vecajiem pārlūkiem (Chrome 60 u.c.) -->
+<script nomodule src="https://cdn.jsdelivr.net/npm/core-js-bundle/minified.js"></script>
+<script nomodule src="https://cdn.jsdelivr.net/npm/resize-observer-polyfill@1.5.1/dist/ResizeObserver.global.js"></script>
+
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.10.0/dist/proj4.min.js"></script>
+<style>
+  /* plānas etiķetes režģa malās */
+  .grid-label{font:12px/1.1 system-ui,Segoe UI,Arial; padding:2px 4px; background:#fff8; border:1px solid #0003; border-radius:4px; }
+</style>
+
+
+
+	
+
+
+<!-- Legacy/modern loader priekš Chrome 60–75 + mini-polyfilli (LABOTĀ VERSIJA) -->
+<script>
+(function(){
+  // vai pārlūks prot ?. un ??
+  function supports(code){ try{ new Function(code)(); return true; } catch(e){ return false; } }
+  var modern = supports('var a={b:1}; a?.b') && supports('var a=null; a ?? 5');
+
+  // MINI polyfilli
+  if(!Element.prototype.matches){
+    Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
+  }
+  if(!Element.prototype.closest){
+    Element.prototype.closest = function(sel){ var el=this; while(el && el.nodeType===1){ if(el.matches(sel)) return el; el=el.parentElement; } return null; };
+  }
+  if(!Element.prototype.replaceChildren){
+    Element.prototype.replaceChildren = function(){
+      while(this.firstChild) this.removeChild(this.firstChild);
+      this.append.apply(this, arguments);
+    };
+  }
+  if(typeof window.ResizeObserver === 'undefined'){
+    window.ResizeObserver = function(){ return {observe:function(){}, unobserve:function(){}, disconnect:function(){}}; };
+  }
+  window.safeStorage = {
+    get: function(k, def){ try{ var v=localStorage.getItem(k); return v==null?def:v; }catch(_){ return def; } },
+    set: function(k,v){ try{ localStorage.setItem(k,v); }catch(_){ } },
+    del: function(k){ try{ localStorage.removeItem(k); }catch(_){ } }
+  };
+
+  if (modern){
+    // PIRMS: s.defer = true; document.head.appendChild(s);
+    document.addEventListener('DOMContentLoaded', function(){
+      var s = document.createElement('script');
+      s.src = 'app.js?v=2025-09-29-01';
+      s.async = false;            // saglabā izpildes secību, neveic “agrīnu” startu
+      document.body.appendChild(s); // ievieto pēc <body> parse
+    }, { once:true });
+  } else {
+    // LEGACY: transpilo, BET palažu tikai pēc DOM gatavības
+    var b = document.createElement('script');
+    b.src = 'https://unpkg.com/@babel/standalone/babel.min.js';
+    b.defer = true; // arī pašu Babel ielādes skriptu atliek
+    b.onload = function(){
+      var x = new XMLHttpRequest();
+      x.open('GET','app.js?v=2025-09-29-01');
+      x.onload = function(){
+        try{
+          var out = Babel.transform(x.responseText, { presets: [['env', {targets:{chrome:'60'}}]] }).code;
+          var run = function(){
+            try{
+              (0,eval)(out);
+              console.info('[legacy] transpiled app.js?v=2025-09-29-01 on the fly (deferred)');
+            }catch(e){ console.error('[legacy-transpile]', e); }
+          };
+          if (document.readyState === 'loading'){
+            document.addEventListener('DOMContentLoaded', run, {once:true});
+          } else {
+            run();
+          }
+        }catch(e){ console.error('[legacy-transpile]', e); }
+      };
+      x.onerror = function(){ console.error('[legacy-transpile] failed to load app.js?v=2025-09-29-01'); };
+      x.send();
+    };
+    b.onerror = function(){ console.error('[legacy] failed to load Babel'); };
+    document.head.appendChild(b);
+  }
+})();
+</script>
+
+	
+
+
+<!-- Fallbacks, ja pārlūks neatbalsta flex-gap (Chrome < 84) -->
+<script>
+(function(){
+  function supportsGap(){
+    try{
+      var f=document.createElement('div'); f.style.display='flex'; f.style.gap='1px';
+      f.appendChild(document.createElement('div')); f.appendChild(document.createElement('div'));
+      document.body.appendChild(f);
+      var ok=(f.scrollHeight===1); document.body.removeChild(f); return ok;
+    }catch(_){ return false; }
+  }
+  if (supportsGap()) return;
+
+  function px(n){ return Number(String(n).replace('px',''))||0; }
+  function apply(root){
+    if(!root||!root.querySelectorAll) return;
+    var all=root.querySelectorAll('*');
+    for(var i=0;i<all.length;i++){
+      var el=all[i], cs=getComputedStyle(el);
+      if(cs.display!=='flex') continue;
+      var rg=px(cs.rowGap), cg=px(cs.columnGap);
+      if((!rg && !cg) || el.__gapFixed) continue;
+      el.__gapFixed=true;
+      el.style.rowGap='0px'; el.style.columnGap='0px';
+      var isRow=cs.flexDirection.indexOf('row')===0;
+      var kids=[].slice.call(el.children);
+      for(var k=0;k<kids.length;k++){
+        var ch=kids[k], s=ch.style, gcs=getComputedStyle(ch);
+        if(isRow){
+          if(k) s.marginLeft=(px(gcs.marginLeft)+cg)+'px';
+          if(rg){ s.marginTop=px(gcs.marginTop)+'px'; s.marginBottom=px(gcs.marginBottom)+'px'; }
+        }else{
+          if(k) s.marginTop=(px(gcs.marginTop)+rg)+'px';
+          if(cg){ s.marginLeft=px(gcs.marginLeft)+'px'; s.marginRight=px(gcs.marginRight)+'px'; }
+        }
+      }
+    }
+  }
+  function run(){ try{ apply(document.body); }catch(_){ } }
+  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', run, {once:true}); } else { run(); }
+  try{ new MutationObserver(function(){ run(); }).observe(document.documentElement,{childList:true,subtree:true}); }catch(_){}
+})();
+</script>
+
+
+
+
+
+
+
+
+
+<script>
+(function () {
+  // Drošs palīgs
+  function call(fn){ try { fn && fn(); } catch(_){ } }
+
+  // ATSAUKSME / ZIŅOT
+  window.toggleIframeAbout = function (event) {
+    if (event && event.preventDefault) event.preventDefault();
+    var el = document.getElementById('iframeContainerAbout');
+    if (!el) return;
+
+    // slēpts?
+    var isHidden = (el.style.display !== 'block') || (el.style.bottom === '-620px');
+
+    if (isHidden) {
+      el.style.display = 'block';
+      setTimeout(function(){ el.style.bottom = '35px'; }, 10);
+    } else {
+      el.style.bottom = '-620px';
+      setTimeout(function(){ el.style.display = 'none'; }, 500);
+    }
+    setTimeout(function(){
+      call(window.__updateMapSafeAreas);
+      call(window.__fitDock);
+    }, 0);
+  };
+
+  // KOPLIETOT (QR)
+  window.toggleIframeQR = function (event) {
+    if (event && event.preventDefault) event.preventDefault();
+    var el = document.getElementById('iframeContainerQR');
+    if (!el) return;
+
+    var isHidden = (el.style.display !== 'block') || (el.style.bottom === '-370px');
+
+    if (isHidden) {
+      el.style.display = 'block';
+      setTimeout(function(){ el.style.bottom = '35px'; }, 10);
+    } else {
+      el.style.bottom = '-370px';
+      setTimeout(function(){ el.style.display = 'none'; }, 500);
+    }
+    setTimeout(function(){
+      call(window.__updateMapSafeAreas);
+      call(window.__fitDock);
+    }, 0);
+  };
+
+  // Sākuma stāvoklis (abi paneļi paslēpti)
+  document.addEventListener('DOMContentLoaded', function () {
+    var about = document.getElementById('iframeContainerAbout');
+    if (about) { about.style.display = 'none'; about.style.bottom = '-620px'; }
+    var qr = document.getElementById('iframeContainerQR');
+    if (qr) { qr.style.display = 'none'; qr.style.bottom = '-370px'; }
+  });
+})();
+</script>
+
+
+
+
+	
+<style>
+
+/* body stāvoklis ielādes laikā */
+body.preloading { overflow: hidden; }
+
+/* pilnekrāna pārklājums – strādā arī vecā Chrome */
+#app-preloader{
+  position: fixed;               /* nevis absolute */
+  top: 0; left: 0; right: 0; bottom: 0;  /* sedz visu viewport */
+  z-index: 2147483647;           /* virs visa */
+  display: grid; place-items: center;
+  padding: 16px;
+  background: linear-gradient(180deg,#0b0f14,#11161d);
+  color: #eef2f7;
+}
+
+/* 100vh “smilšu maisi” — nav obligāti, jo izmantojam fixed,
+   bet noder dažiem OEM/Android variantiem */
+#app-preloader{ 
+  min-height: 100vh;
+  min-height: calc(var(--vh, 1vh) * 100);
+}
+
+#app-preloader .preloader-inner{
+  width: min(540px, 94vw);
+  background: rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  padding: 16px 18px 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  text-align: center;
+}
+#app-preloader .logo{ font-weight: 700; margin-bottom: 6px; letter-spacing: .3px; }
+#app-preloader .msg{ margin: .2rem 0 .6rem; opacity: .9; }
+
+/* progress */
+#app-preloader .progress{
+  height: 10px; border-radius: 999px; overflow: hidden;
+  background: rgba(255,255,255,.09);
+  border: 1px solid rgba(255,255,255,.12);
+}
+#app-preloader .progress > span{
+  display:block; height:100%; width:0%;
+  background: linear-gradient(90deg,#aa2d2d,#d63c3c);
+  transition: width .25s ease;
+}
+
+/* poga parādās pēc ~6s (to ieslēdz JS ar .show-skip) */
+#preloaderSkip{
+  display: none; margin-top: .8rem;
+  padding: .5rem .8rem;
+  background:#2b2f36; color:#fff;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:10px; cursor:pointer;
+}
+#app-preloader.show-skip #preloaderSkip{ display: inline-block; }
+
+/* noņemšana ar fade — to uzliek JS ar .hidden */
+#app-preloader.hidden{
+  opacity: 0; visibility: hidden;
+  transition: opacity .36s ease, visibility 0s linear .4s;
+}
+
+
+
+
+
+
+
+#iframeContainerAbout,
+#iframeContainerQR {
+  position: fixed;
+/*  left: 50%; */
+/*  transform: translateX(-50%); */
+/*  z-index: 4000; */
+  transition: bottom .45s ease; 
+  /* display un bottom kontrolē JS */
+}
+
+/* sākuma “paslēpts” stāvoklis – saskaņā ar JS */
+#iframeContainerAbout { bottom: -620px; display: none; }
+#iframeContainerQR    { bottom: -370px; display: none; }	
+</style>
+
+
+
+
+
+
+
+
+
+
+
+<!-- DEBUG (SAFE): kļūdas + preloader watchdog, bez console pārrakstīšanas -->
+<script>
+(function(){
+  const t0 = performance.now();
+  const EVT = [];
+  const OC = {
+    log: console.log.bind(console),
+    info: console.info.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console),
+    debug: console.debug.bind(console),
+  };
+  const push = (t, data={}) => {
+    EVT.push({ t, ts: Date.now(), rel: +(performance.now()-t0).toFixed(1), data });
+  };
+
+  // Pamat notikumi
+  const nav = performance.getEntriesByType('navigation')[0];
+  push('NAV', { type: nav?.type });
+  document.addEventListener('readystatechange', () => push('RS', { state: document.readyState }));
+  document.addEventListener('DOMContentLoaded', () => push('DCL', {}), { once: true });
+  window.addEventListener('load', () => push('LOAD', {}), { once: true });
+  window.addEventListener('pageshow', e => push('PAGESHOW', { persisted: e.persisted }), { once: true });
+
+  // Kļūdas + resursu kļūdas (bez console pārrakstīšanas)
+  window.addEventListener('error', e => {
+    const t = e.target;
+    if (t && (t.tagName === 'IMG' || t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+      push('RESERR', { tag: t.tagName, url: t.currentSrc || t.src || t.href });
+    } else {
+      push('ERR', { message: e.message, filename: e.filename, lineno: e.lineno, colno: e.colno, stack: e.error?.stack });
+    }
+  }, true);
+  window.addEventListener('unhandledrejection', e => {
+    push('ERR', { message: e.reason?.message || String(e.reason), stack: e.reason?.stack });
+  });
+
+  // Preloader watchdog: ja pēc 4s vēl redzams — paslēpjam piespiedu kārtā
+  const pre = document.getElementById('app-preloader');
+  setTimeout(() => {
+    const stuck = document.body.classList.contains('preloading') || (pre && pre.offsetParent !== null);
+    push('PRECHK', { after: 4000, stuck });
+    if (stuck) {
+      document.body.classList.remove('preloading');
+      if (pre) { pre.style.display = 'none'; pre.style.opacity = '0'; pre.style.pointerEvents = 'none'; }
+      push('PRE-FORCE-HIDE', {});
+    }
+    // Taimingi
+    const n = performance.getEntriesByType('navigation')[0];
+    if (n) {
+      push('TIMING', {
+        ttfb: Math.round(n.responseStart - n.requestStart),
+        domInteractive: Math.round(n.domInteractive - n.startTime),
+        dcl: Math.round(n.domContentLoadedEventEnd - n.startTime),
+        load: Math.round(n.loadEventEnd - n.startTime),
+        transfer: Math.round(n.responseEnd - n.requestStart),
+      });
+    }
+    // Kopsavilkums
+    const all = performance.getEntriesByType('resource');
+    const last = all.slice(-24).map(r => ({ name: r.name, type: r.initiatorType, dur: Math.round(r.duration), cached: r.transferSize === 0 }));
+    push('RES-SUM', { count: all.length, last });
+
+    window.__lastDebugReport = { url: location.href, ua: navigator.userAgent, events: EVT };
+    OC.info('=== DevTool Report (safe) ===\n' + JSON.stringify(window.__lastDebugReport, null, 2));
+  }, 4000);
+})();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+	
+</head>
+<body>
+
+
+	
+<!-- PRELOADER (sākuma pārklājums) -->
+<div id="app-preloader" role="status" aria-live="polite" aria-label="Ielādējam…">
+  <div class="preloader-inner">
+    <img class="brand" src="/Virtual-compass-cadet.lv/img/CADET.LV.png" alt="CADET.LV" />
+
+	<div class="spinner" aria-hidden="true"></div>
+    <div class="progress"><span style="width:0%"></span></div>
+    <p class="msg">Ielādējam… 0%</p>
+	<div class="preloader-about" aria-label="Par projektu">
+  	<span>CADET.LV</span>
+ 	<span>INTERAKTĪVAIS KOMPASS</span>
+  	<span>© JĀNIS EGLIS</span>
+	</div>
+    <button id="preloaderSkip" class="skip" type="button">Turpināt</button>
+  </div>
+</div>
+
+
+	
+   	<!-- Brīdinājuma pārklājums viedtālruņiem -->
+							<div id="mobile-warning" style="display: none;">
+								<div class="warning-content">
+									<p>Lūdzu, izmantojiet lielāku ekrānu šīs lietotnes darbībai.</p>
+									<img style="width:100px; height:auto;" src="/Virtual-compass-cadet.lv/img/nepietiekams_ekrans.png" alt="Nepietiekams ekrāna izmērs" style="width: 80%; margin-top: 20px;">
+									<p>INTERAKTĪVAIS KOMPASS</p>
+									<p style="color: rgba(255, 255, 255, 0.5);">CADET.LV | © Jānis Eglis</p>
+								</div>
+							</div>
+
+							<!-- Pārklājums mobilajām ierīcēm vertikālā režīmā -->
+							<div id="orientation-overlay">
+								<h1><img src="/Virtual-compass-cadet.lv/img/rotacija.jpg" alt="Pagrieziet ierīci"></h1>
+							</div>						
+
+							<div id="fullscreenMessage" class="fs-message-hidden">
+								<div class="arrow"></div>
+								<p id="fullscreenMessagetext">
+									<span class="highlight-title">Lūdzu, iestatiet logu pilnā izmērā, lai sāktu darbu.</span>
+									<br>
+									Varat izmantot F11, lai logu darbinātu pilnekrāna režīmā vai palielināt logu līdz ekrāna izmēram spiežot simbolu "𖧵" pārlūka galvenē.<br><br>
+									<a href="https://cadet.lv" target="_blank" style="color: white; font-weight: bold;">CADET.LV</a>
+									<br>
+									<span style="color: " class="copyright">CADET.LV | © Jānis Eglis</span>
+								</p>
+							</div> 
+							
+							<div id="touchscreenPopup"></div>
+							
+							<div id="fullscreenPopup"></div>
+
+													
+
+
+							 
+
+
+<div id="canvasContainer" style="position:fixed;width:1920px;height:1080px;">
+  <!-- 1) Vienīgā kanva (lokālajai bildes kartei) -->
+  <canvas id="mapCanvas" width="1920" height="1080" style="display:block;width:100%;height:100%;"></canvas>
+
+  <!-- 2) Tiešsaistes karte + tumšošanas pārklājums -->
+  <div id="onlineMap">
+    <div id="onlineMapDim"></div> <!-- tumšošanas pārklājums, pirmais bērns -->
+    <!-- te Leaflet iemetīs karti -->
+  </div>
+</div>
+                
+
+
+
+								
+<!-- Jaunais <img>, kur glabāt augšupielādēto attēlu -->
+							  <img id="uploadedImg" 
+								   
+								   alt="Augšupielādētais attēls"
+								   style="
+									 position: absolute;
+									 top: 0;
+									 left: 0;
+									 display: none; /* Slēpts līdz augšupielādē attēlu */
+									 cursor: move;  /* Ja vēlaties, var padarīt arī pārvietojamu */
+									  
+									 ">
+
+									 
+
+							  <!-- MapResize rokturis -->
+								<div id="resizeHandle">
+									<img src="/Virtual-compass-cadet.lv/img/map_resize_handle.png" alt="Resize">
+								</div>
+							
+
+																			
+							<!-- MapResize Papildu elements attēlam -->
+							<img id="newUploadedImg" 
+								 style="
+								   position: absolute; 
+								   top: 50px; 
+								   left: 50px; 
+								   display: none;
+								   cursor: move;
+								   
+								 " 
+								 alt="Augšupielādētais attēls">
+
+							<!-- MapResize rokturis -->
+							<div id="newResizeHandle"
+								 style="
+								   display: none;
+								   width: 30px;
+								   height: 30px;
+								   position: absolute;
+								   cursor: se-resize;
+								   z-index: 5;
+								 ">
+							</div>						
+							
+
+							<div class="dropdown-container">
+							        <div class="top-bar">
+							            <span class="dropdown-toggle" id="toggleInstruction">Lietotāja ceļvedis ⬇</span>
+							            <span class="dropdown-toggle" id="toggleMaterials">Mācību materiāli ⬇</span>
+							        </div>
+							
+							        <div class="dropdown-menu" id="dropdownInstruction">
+							            <a href="https://cadet.mozello.lv/virtualais-kompass-macibu-materiali-un-instrukcija/lietotaja-celvedis/page/">DARBAM AR DATORU</a>
+							            <a href="https://cadet.mozello.lv/virtualais-kompass-macibu-materiali-un-instrukcija/lietotaja-celvedis/page-1/">DARBAM AR SKĀRIENJŪTĪGĀM IERĪCĒM</a>
+										<a href="https://cadet.mozello.lv/virtualais-kompass-macibu-materiali-un-instrukcija/lietotaja-celvedis/page-2/">LIETOŠANAS NOTEIKUMI</a>
+							           <iframe id="instructionFrame" name="contentFrame" style="width: 100%; height: 85vh; border: none;"></iframe>  
+							            
+							        </div>
+							
+							        <div class="dropdown-menu" id="dropdownMaterials">
+							        <a href="https://cadet.mozello.lv/virtualais-kompass-macibu-materiali-un-instrukcija/macibu-materiali/topografiskas-kartes/" class="dropdown-link">TOPOGRĀFISKĀS KARTES</a>
+							        <a href="https://cadet.mozello.lv/virtualais-kompass-macibu-materiali-un-instrukcija/macibu-materiali/merogs-un-attalumi/" class="dropdown-link">MĒROGS UN ATTĀLUMI</a>
+							        <a href="https://cadet.mozello.lv/virtualais-kompass-macibu-materiali-un-instrukcija/macibu-materiali/apzimejumi-kartes/" class="dropdown-link">APZĪMĒJUMI KARTĒS</a>
+							        <a href="https://cadet.mozello.lv/virtualais-kompass-macibu-materiali-un-instrukcija/macibu-materiali/direkcijas-lenkis-un-azimuts/" class="dropdown-link">DIREKCIJAS LEŅĶIS UN AZIMUTS</a>
+							        <a href="https://cadet.mozello.lv/virtualais-kompass-macibu-materiali-un-instrukcija/macibu-materiali/koordinates/" class="dropdown-link">KOORDINĀTES</a>
+							        <a href="https://cadet.mozello.lv/virtualais-kompass-macibu-materiali-un-instrukcija/macibu-materiali/citi/" class="dropdown-link">CITI</a>
+									
+									 
+							 <iframe id="contentFrame" name="contentFrame" style="width: 100%; height: 75vh; border: none;"></iframe>
+							        </div>
+									 			
+														
+							</div>	
+														
+
+							 <!-- Izvēlne konteineram -->
+							 <!-- Izvēlne konteineram LABAJĀ pusē -->
+							<div class="position-selector-container">
+								<div class="position-selector">
+									<button class="toggle-selector">❯</button>
+									<select id="positionSelect">
+										<option disabled selected>Izvēlies pogas novietojumu:</option>
+										<option value="bottom">Apakšā (noklusējums)</option>
+										<option value="right">Labajā pusē</option>
+										<option value="left">Kreisajā pusē</option>
+									</select>
+								</div>
+							</div>
+
+	
+							<!-- Izvēlne konteineram KREISAJĀ pusē -->
+							<div class="position-selector-container-left">
+								<div class="position-selector-left">
+									<button class="toggle-selector-left">❮</button>
+									<select id="positionSelectLeft">
+										<option disabled selected>Izvēlies pogas novietojumu:</option>
+										<option value="bottom">Apakšā (noklusējums)</option>
+										<option value="right">Labajā pusē</option>
+										<option value="left">Kreisajā pusē</option>
+									</select>
+								</div>
+							</div>
+
+							<!-- Popup grid view -->
+							<div id="popupMenu" style="display: none;">
+								<h3>Izvēlieties noteikšanas metodi</h3>
+								<div class="button-row">
+									<button id="popupOption1" class="popup-button">
+										<img src="/Virtual-compass-cadet.lv/img/GRID_VIEW_1_OPTION.png" alt="Funkcija 1">
+									</button>
+									<button id="popupOption2" class="popup-button">
+										<img src="/Virtual-compass-cadet.lv/img/GRID_VIEW_2_OPTION.png" alt="Funkcija 2">
+									</button>
+								</div>
+								<button id="popupClose" class="popup-close">Aizvērt</button>
+							</div>
+
+							<!-- Pogas konteiners -->
+							<div class="button-container bottom" id="buttonContainer">
+								<button id="resetMap">
+									<img src="/Virtual-compass-cadet.lv/img/RESET_LOCAL_MAP.png" alt="Reset Map">
+								</button>
+								<button id="uploadMap">
+									<img src="/Virtual-compass-cadet.lv/img/UPLOAD_LOCAL_MAP.png" alt="Upload Map">
+								</button>
+                <button id="toggleOnlineMap" data-title="Tiešsaistes karte" aria-label="Tiešsaistes karte">
+                  <img alt="Tiešsaistes karte"
+                       src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3,6 9,3 15,6 21,3 21,18 15,21 9,18 3,21 3,6'/%3E%3Cline x1='9' y1='3' x2='9' y2='18'/%3E%3Cline x1='15' y1='6' x2='15' y2='21'/%3E%3C/svg%3E">
+                </button>
+								<button id="resetCompass">
+									<img src="/Virtual-compass-cadet.lv/img/RESET_COMPASS.png" alt="Reset Compass">
+								</button>
+								<button class="touch-only" id="toggleRotationMode">
+									<img src="/Virtual-compass-cadet.lv/img/ROTATE_COMPASS_BASE.png" alt="Toggle Rotation">
+								</button>			
+								<button class="touch-only" id="lockRotationMode">
+									<img src="/Virtual-compass-cadet.lv/img/COMPASS_ROTATE_UNLOCK.png" alt="Lock Rotation">
+								</button>	
+								<button id="rotateCompass90">
+									<img src="/Virtual-compass-cadet.lv/img/GRID_VIEW.png" alt="Rotate 90° and Lock">
+								</button>
+								<button id="toggleFullscreen">
+								<img id="fullscreenIcon" src="/Virtual-compass-cadet.lv/img/fullscreen_enter.png" alt="Pilnkrāna Ieslēgšana">
+								</button>
+							</div>
+							
+							<div id="about">
+							<a href="javascript:void(0);" class="qrLink" onclick="toggleIframeQR(event)">KOPLIETOT</a>
+								<span class="abouttext">CADET.LV</span>
+								<span class="abouttext" >INTERAKTĪVAIS KOMPASS</span> 
+								<span class="abouttext">© JĀNIS EGLIS</span>
+								<a href="javascript:void(0);" class="aboutlink" onclick="toggleIframeAbout(event)">ATSAUKSME / ZIŅOT</a>
+							</div>
+							
+							
+							<!-- IFRAME KONTEINERS (SĀKOTNĒJI PASLĒPTS) -->
+							<div id="iframeContainerAbout">
+								<iframe id="feedbackIframe" src="https://docs.google.com/forms/d/e/1FAIpQLSdflr72km2RpI7hdn05AmH5gRZgBk69y7UCz0sCJ37ujOyQ3Q/viewform?embedded=true" frameborder="0"></iframe>
+								<button id="closeIframeAbout" onclick="toggleIframeAbout(event)">✖</button>
+							</div>						
+							
+							<!-- QR kods konteineris (SĀKOTNĒJI PASLĒPTS) -->
+							<div id="iframeContainerQR">
+								<div id="qrCodeContent">
+									<p class="qrTitle">KOPLIETOŠANAS QR KODS AUDITORIJAI</p>
+									<img id="qrCodeImage" src="/Virtual-compass-cadet.lv/img/DOC_ERROR.png" alt="QR Code">
+								</div>
+								<button id="closeIframeQR" onclick="toggleIframeQR(event)">✖</button>
+							</div>
+
+							<div id="compassContainer">
+								<div id="compassScaleContainer">
+									<div id="compassInner">
+										<img id="compassBase" src="/Virtual-compass-cadet.lv/img/pamatne.png" alt="Compass Base">
+									</div>  
+									<div id="compassScaleInner">
+										<img id="compassScale" src="/Virtual-compass-cadet.lv/img/skala.png" alt="Compass Scale">
+									</div>      
+									<img id="compassNeedle" src="/Virtual-compass-cadet.lv/img/adata.png" alt="Compass Needle">  
+								</div>
+							</div>
+
+
+
+
+<!-- <script>
+/* ================== PRINT DEBUGGER v2 — CORS SAFE ================== */
+/* Drop-in skripts: rāda, no kā tiek veidots drukas priekšskatījums,
+   iezīmē drukas “kasti” (sarkans rāmis), žurnalē Leaflet darbības.
+   Nekādas piekļuves citu domēnu iframes → nav SecurityError. */
+(function(){
+  'use strict';
+  const TAG='%c[PRINTDBG]'; const TAGS='background:#111;color:#9cff57;padding:1px 4px;border-radius:3px';
+  const log=(...a)=>console.log(TAG,TAGS,...a);
+  const warn=(...a)=>console.warn(TAG,TAGS,...a);
+
+  const MM_TO_PX = mm => Math.round(mm * 96 / 25.4);
+  const $ = sel => document.querySelector(sel);
+
+  // ——— droši paņemam L.Map instanci, bez globālo logu “skanēšanas”
+  function getMapSafe(){
+    try{
+      if (window.map && window.L && window.map instanceof L.Map) return window.map;
+      // rezerves variants: mēģinām no #onlineMap iekšējā Leaflet instance
+      const el = document.getElementById('onlineMap');
+      if (!el || !window.L) return null;
+      // nav publiska API no elementa → paliek tikai window.map
+      return null;
+    }catch(_){ return null; }
+  }
+
+  // ——— nolasa A4/A3 mm no TAVA @media print CSS (ignorē svešus/CORS stilus)
+  function getPrintBoxMmFromCSS(){
+    let out = { w:277, h:190, source:'default' }; // A4 landscape pieņēmums
+    for (const ss of document.styleSheets){
+      let rules; try{ rules = ss.cssRules || ss.rules; }catch(_){ continue; } // CORS droši
+      if (!rules) continue;
+      for (const r of rules){
+        // atbalstām arī @media print
+        if (r.type === CSSRule.MEDIA_RULE){
+          if (!Array.from(r.media).some(m=>/print/i.test(m))) continue;
+          for (const rr of r.cssRules||[]){ pick(rr); }
+        } else { pick(r); }
+      }
+    }
+    return out;
+    function pick(rule){
+      try{
+        const sel = rule.selectorText || '';
+        if (!sel) return;
+        if (sel.includes('body.print-mode') && sel.includes('#onlineMap')){
+          const txt = rule.cssText || '';
+          const mW = /width\s*:\s*([\d.]+)mm/i.exec(txt);
+          const mH = /height\s*:\s*([\d.]+)mm/i.exec(txt);
+          if (mW && mH) out = { w:+mW[1], h:+mH[1], source:'css' };
+        }
+      }catch(_){}
+    }
+  }
+
+  // ——— sarkanais pārklājums (rāda lapas mērķa kasti ekrāna centrā)
+  const OVER_ID='printDbgOverlay', OVER_CSS='printDbgOverlayCSS';
+  function ensureOverlay(){
+    if (!document.getElementById(OVER_CSS)){
+      const st = document.createElement('style'); st.id=OVER_CSS;
+      st.textContent = `
+#${OVER_ID}{position:fixed;inset:0;margin:auto;width:0;height:0;z-index:2147483647;pointer-events:none;display:none}
+#${OVER_ID}.on{display:block}
+#${OVER_ID} .box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);outline:3px dashed rgba(255,0,0,.9);background:rgba(255,0,0,.06)}
+#${OVER_ID} .cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:44px;height:44px}
+#${OVER_ID} .cross:before,#${OVER_ID} .cross:after{content:"";position:absolute;background:rgba(255,0,0,.95)}
+#${OVER_ID} .cross:before{left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%)}
+#${OVER_ID} .cross:after{top:50%;left:0;right:0;height:2px;transform:translateY(-50%)}
+#${OVER_ID} .label{position:absolute;right:10px;bottom:10px;font:600 12px/1.25 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:6px 8px;border-radius:6px}
+      `;
+      document.head.appendChild(st);
+    }
+    if (!document.getElementById(OVER_ID)){
+      const d=document.createElement('div'); d.id=OVER_ID;
+      d.innerHTML=`<div class="box"></div><div class="cross"></div><div class="label"></div>`;
+      document.body.appendChild(d);
+    }
+  }
+  function overlay(on){
+    ensureOverlay();
+    const { w,h,source } = getPrintBoxMmFromCSS();
+    const wrap = document.getElementById(OVER_ID);
+    const box = wrap.querySelector('.box');
+    box.style.width  = MM_TO_PX(w)+'px';
+    box.style.height = MM_TO_PX(h)+'px';
+    wrap.querySelector('.label').textContent = `Print box: ${w}×${h} mm • ${source}`;
+    wrap.classList.toggle('on', !!on);
+  }
+
+  // ——— galvenā mērījumu funkcija (nekad nemet kļūdu)
+  function measure(tag='STATE'){
+    try{
+      const mapEl = document.getElementById('onlineMap');
+      const m = getMapSafe();
+      const inPrint = document.body.classList.contains('print-mode');
+
+      const cssMm = getPrintBoxMmFromCSS();
+      const cssPx = { w: MM_TO_PX(cssMm.w), h: MM_TO_PX(cssMm.h) };
+
+      let info = {
+        tag, printMode: inPrint,
+        css: { mm: cssMm, px: cssPx },
+        onlineMap: null, map: null
+      };
+
+      if (mapEl){
+        const cs = getComputedStyle(mapEl);
+        const rc = mapEl.getBoundingClientRect();
+        info.onlineMap = {
+          pos: cs.position, inset:{top:cs.top,left:cs.left,right:cs.right,bottom:cs.bottom},
+          margin: cs.margin, sizeCss:{w:cs.width,h:cs.height},
+          rect: { x:Math.round(rc.x), y:Math.round(rc.y), w:Math.round(rc.width), h:Math.round(rc.height) },
+          transform: cs.transform
+        };
+      }
+
+      if (m && window.L){
+        const keepCenter = m.getCenter();
+        const size = m.getSize();
+        const centerPx = m.latLngToContainerPoint(keepCenter);
+        // “ģeometriskais” konteinera centrs lat/lng:
+        let containerCenterLL = null;
+        if (mapEl){
+          const rc = mapEl.getBoundingClientRect();
+          containerCenterLL = m.containerPointToLatLng(L.point(rc.width/2, rc.height/2));
+        }
+        let deltaMeters = null;
+        if (containerCenterLL){
+          try{ deltaMeters = L.latLng(keepCenter).distanceTo(containerCenterLL); }catch(_){}
+        }
+
+        info.map = {
+          zoom: m.getZoom(), size, centerPx,
+          keepCenter: { lat:+keepCenter.lat.toFixed(6), lng:+keepCenter.lng.toFixed(6) },
+          containerCenterLL: containerCenterLL && { lat:+containerCenterLL.lat.toFixed(6), lng:+containerCenterLL.lng.toFixed(6) },
+          centerDeltaMeters: (deltaMeters!=null)? Math.round(deltaMeters) : null,
+          panFix: { dx: (size.x/2 - centerPx.x), dy: (size.y/2 - centerPx.y) }
+        };
+      }
+
+      log(tag, info);
+      return info;
+    }catch(e){
+      warn('measure suppressed error:', e);
+      return null;
+    }
+  }
+
+  // ——— ielāpam Leaflet metodes, lai redzēt secību (droši)
+  function patchLeafletLogging(){
+    const m = getMapSafe();
+    if (!m || m.__dbgPatched) return;
+    m.__dbgPatched = true;
+    ['setView','panBy','invalidateSize','_resetView'].forEach(name=>{
+      if (typeof m[name] !== 'function') return;
+      const orig = m[name].bind(m);
+      m[name] = function(){
+        log(`map.${name}(`, ...arguments, ')');
+        const r = orig.apply(this, arguments);
+        measure(`after ${name}`);
+        return r;
+      };
+    });
+    log('Leaflet hooks ready: setView/panBy/invalidateSize/_resetView');
+  }
+
+  // ——— hookojam window.print, BET NEliekam measure pirms orig.print (lai nekas nelūzt)
+  (function hookPrint(){
+    if (!window.print) return;
+    const orig = window.print.bind(window);
+    window.print = function(){
+      log('window.print()');
+      overlay(true);              // vizuāli parādam mērķa “kasti”
+      try{ return orig(); }
+      finally{}
+    };
+    log('Hooked window.print ✓');
+  })();
+
+  // ——— before/after print + izmaiņas body klasēs
+  window.addEventListener('beforeprint', ()=>{
+    log('beforeprint');
+    overlay(true);
+    patchLeafletLogging();
+    measure('beforeprint');
+  });
+  window.addEventListener('afterprint', ()=>{
+    log('afterprint');
+    measure('afterprint');
+    overlay(false);
+  });
+
+  new MutationObserver(list=>{
+    for (const m of list){
+      if (m.type==='attributes' && m.attributeName==='class'){
+        const on = document.body.classList.contains('print-mode');
+        log('body.class → print-mode:', on);
+        overlay(on);
+        measure(on ? 'PRINT-MODE ON' : 'PRINT-MODE OFF');
+      }
+    }
+  }).observe(document.body, { attributes:true });
+
+  // ——— publiska API testiem
+  window.__printDebug = {
+    measure: tag => measure(tag),
+    show: ()=>overlay(true),
+    hide: ()=>overlay(false)
+  };
+
+  // sākotnējais stāvoklis
+  setTimeout(()=>{ patchLeafletLogging(); measure('onload'); }, 800);
+})();
+</script>
+
+
+
+
+
+<script>
+/* =========================================================
+   PRINT ANCHOR FIX v1 — druka pēc “sarkanā laukuma” centra
+   Likt tieši pirms </body>. Atzīmē savu sarkano kasti ar
+   data-print-anchor (piem.: <div id="redBox" data-print-anchor>…)
+   ========================================================= */
+(function(){
+  'use strict';
+  if (window.__printAnchorFixHooked) return;
+  window.__printAnchorFixHooked = true;
+
+  const log = (...a)=>console.log('[PRINTFIX]', ...a);
+  const err = (...a)=>console.error('[PRINTFIX]', ...a);
+
+  // Droša piekļuve Leaflet kartei (izmanto tavu app.js āķi)
+  function getMap(){
+    try {
+      if (typeof window.__getMap === 'function') return window.__getMap();
+      if (window.map && typeof window.map.getCenter === 'function') return window.map;
+    } catch(_) {}
+    return null;
+  }
+
+  // ENKURS: sarkanais laukums (vai #onlineMap, ja enkura nav)
+  function getAnchorEl(){
+    return document.querySelector('[data-print-anchor]') ||
+           document.getElementById('onlineMap') ||
+           document.body;
+  }
+
+  // Pilna telemetrija par enkurpunktu un konversiju uz LatLng
+  function anchorInfo(map){
+    const anchor = getAnchorEl();
+    const aR = anchor.getBoundingClientRect();
+    const cx = aR.left + aR.width/2;
+    const cy = aR.top  + aR.height/2;
+
+    const mc = map.getContainer();
+    const mR = mc.getBoundingClientRect();
+    const pt = L.point(cx - mR.left, cy - mR.top);    // konteinera pikseļi
+    const ll = map.containerPointToLatLng(pt);
+
+    const sz = map.getSize();
+    const cpx = sz.x/2, cpy = sz.y/2;
+    const dX = (cpx - pt.x), dY = (cpy - pt.y);
+
+    return { anchor, aR, cx, cy, mc, mR, pt, ll, sz, cpx, cpy, dX, dY };
+  }
+
+  // Reāla centrēšana pēc enkura, bez animācijas
+  function recenterByAnchor(map){
+    const i = anchorInfo(map);
+
+    // 1) pieliekam LatLng tieši par centru
+    map.setView(i.ll, map.getZoom(), { animate:false });
+
+    // 2) pikseļu korekcija, ja enkurs (pt) nav precīzi vidū
+    map.panBy([ i.dX, i.dY ], { animate:false });
+
+    log(
+      'ENKURS:',
+      `el=${i.anchor.id || i.anchor.className || i.anchor.tagName}`,
+      `rect=${Math.round(i.aR.left)}:${Math.round(i.aR.top)} ${Math.round(i.aR.width)}x${Math.round(i.aR.height)}`
+    );
+    log(
+      'KONVERSIJA:',
+      `anchorPx=${i.pt.x.toFixed(1)}x${i.pt.y.toFixed(1)} (container)`,
+      `keepCenter=${i.ll.lat.toFixed(6)},${i.ll.lng.toFixed(6)}`,
+      `panFix=${i.dX.toFixed(1)},${i.dY.toFixed(1)}`
+    );
+  }
+
+  // Papildu izdrukas izmērs/mm → px diagnostika (ja vajag)
+  function logPrintBox(){
+    try{
+      const m = getMap(); if (!m) return;
+      const el = m.getContainer();
+      const cs = getComputedStyle(el);
+      log('SIZE @print CSS:',
+        `width=${cs.width} height=${cs.height}`,
+        '(ja ieliets dinamiskais @page, izmēri būs mm→px)'
+      );
+    }catch(_){}
+  }
+
+  // ——— Hook: beforeprint ———
+  window.addEventListener('beforeprint', ()=>{
+    const map = getMap();
+    if (!map){ err('Map nav pieejams'); return; }
+    try{
+      document.body.classList.add('print-mode'); // saskaņā ar tavu CSS
+      // Pārrēķins pirms centrēšanas (ja konteiners maina izmēru)
+      try { map.invalidateSize(true); } catch(_){}
+      recenterByAnchor(map);
+      setTimeout(logPrintBox, 50);
+    }catch(e){ err('beforeprint kļūda', e); }
+  });
+
+  // ——— Hook: afterprint ———
+  window.addEventListener('afterprint', ()=>{
+    try{
+      document.body.classList.remove('print-mode');
+      log('afterprint – print-mode OFF');
+      // drošībai: atjauno Leaflet izmēru
+      const map = getMap(); try { map && map.invalidateSize(true); } catch(_){}
+    }catch(e){ err('afterprint kļūda', e); }
+  });
+
+  // ——— Hook: window.print (vienreiz) ———
+  (function hookPrintOnce(){
+    if (window.__printHooked) return;
+    const orig = window.print;
+    window.print = function(){
+      try{
+        const map = getMap();
+        if (map){
+          document.body.classList.add('print-mode');
+          map.invalidateSize(true);
+          recenterByAnchor(map);
+        }else{
+          err('Map nav pieejams (print call)');
+        }
+      }catch(e){ err('print pirms-centrēšana izgāzās', e); }
+      return orig.call(window);
+    };
+    window.__printHooked = true;
+    log('Hooked window.print ✓ (anchor-aware)');
+  })();
+
+})();
+</script> -->
+
+<!-- /index.html — INSERT BEFORE </body> -->
+<!-- <script>
+(() => {
+  'use strict';
+  if (window.__pca2) return; window.__pca2 = true;
+
+  /* ========================= helpers ========================= */
+  const mm2px = mm => Math.round(mm * 96 / 25.4);
+  const now   = () => new Date().toISOString();
+
+  function getMap(){
+    try{
+      if (window.map && typeof window.map.getCenter === 'function') return window.map;
+      if (typeof window.__getMap === 'function'){ const m = window.__getMap(); if (m && m.getCenter) return m; }
+    }catch(_){}
+    return null;
+  }
+  function visible(el){
+    if (!el) return false;
+    const cs = getComputedStyle(el);
+    return !!(el.offsetWidth && el.offsetHeight && cs.display!=='none' && cs.visibility!=='hidden');
+  }
+  function safeAreas(){
+    const cs = getComputedStyle(document.documentElement);
+    return {
+      top   : (cs.getPropertyValue('--map-top-safe')   || '').trim() || null,
+      bottom: (cs.getPropertyValue('--map-bottom-safe')|| '').trim() || null
+    };
+  }
+  function readPrintBoxMm(){
+    let mm = { w:null, h:null, src:null };
+    for (const ss of document.styleSheets){
+      let rules; try{ rules = ss.cssRules || ss.rules; }catch(_){ continue; }
+      if (!rules) continue;
+      const scan = (rule) => {
+        const sel = rule.selectorText || '';
+        if (sel && sel.includes('body.print-mode') && sel.includes('#onlineMap')){
+          const txt = rule.cssText || '';
+          const mW = /width\s*:\s*([\d.]+)mm/i.exec(txt);
+          const mH = /height\s*:\s*([\d.]+)mm/i.exec(txt);
+          if (mW && mH) mm = { w:+mW[1], h:+mH[1], src:'css' };
+        }
+      };
+      for (const r of rules){
+        if (r.type === CSSRule.MEDIA_RULE && r.cssRules) { for (const rr of r.cssRules) scan(rr); }
+        else scan(r);
+      }
+    }
+    return mm;
+  }
+
+  /* ========================= UI ========================= */
+  function injectCSS(){
+    if (document.getElementById('pca2-css')) return;
+    const st = document.createElement('style'); st.id='pca2-css';
+    st.textContent = `
+#pca2-wrap{ position:fixed; inset:0; z-index:2147483600; pointer-events:none }
+#pca2-wrap .cross{ position:fixed; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%; border:2px solid currentColor }
+#pca2-wrap .cross::before,#pca2-wrap .cross::after{ content:""; position:absolute; left:50%; top:50%; background:currentColor; transform:translate(-50%,-50%) }
+#pca2-wrap .cross::before{ width:14px; height:2px }  .cross::after{ width:2px; height:14px }
+#pca2-ovl{ color:#3aa3ff }  /* 🔵 overlay center (screen) */
+#pca2-keep{ color:#00e676 } /* 🟩 keepCenter */
+#pca2-map{ color:#ff1744 }  /* 🔴 map.getCenter() */
+#pca2-cont{ color:#ffffff } /* ⚪ container center (screen) */
+
+#pca2-hud{
+  position:fixed; left:10px; bottom:10px; z-index:2147483601; pointer-events:auto;
+  background:rgba(0,0,0,.7); color:#fff; padding:10px 12px; border-radius:10px;
+  border:1px solid rgba(255,255,255,.18); font:12px/1.35 ui-monospace,Menlo,Consolas,monospace; max-width:min(90vw,680px)
+}
+#pca2-hud .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px }
+#pca2-hud button{ all:unset; cursor:pointer; background:rgba(255,255,255,.14); padding:3px 8px; border-radius:6px }
+@media print{ #pca2-wrap, #pca2-hud{ display:none !important } }
+`;
+    document.head.appendChild(st);
+  }
+  function ensureUI(){
+    injectCSS();
+    if (!document.getElementById('pca2-wrap')){
+      const w = document.createElement('div'); w.id='pca2-wrap';
+      w.innerHTML = `<div id="pca2-ovl" class="cross"></div><div id="pca2-keep" class="cross"></div><div id="pca2-map" class="cross"></div><div id="pca2-cont" class="cross"></div>`;
+      document.body.appendChild(w);
+    }
+    if (!document.getElementById('pca2-hud')){
+      const hud = document.createElement('div'); hud.id='pca2-hud';
+      hud.innerHTML = `
+        <div class="row"><strong>PrintCenterAudit v2</strong>
+          <button id="pca2-probe">Probe</button>
+          <button id="pca2-start">Start</button>
+          <button id="pca2-stop">Stop</button>
+          <button id="pca2-dl">Download JSON</button>
+        </div>
+        <div id="pca2-info">ready</div>`;
+      document.body.appendChild(hud);
+      hud.querySelector('#pca2-probe').onclick = () => snapshot('manual');
+      hud.querySelector('#pca2-start').onclick = () => { recording = true; info('recording: on'); };
+      hud.querySelector('#pca2-stop').onclick  = () => { recording = false; info('recording: off'); };
+      hud.querySelector('#pca2-dl').onclick    = downloadJSON;
+    }
+  }
+  function place(id, x, y){ const el=document.getElementById(id); if (el){ el.style.left=x+'px'; el.style.top=y+'px'; } }
+  function info(txt){ const el=document.getElementById('pca2-info'); if (el) el.textContent = txt; }
+
+  /* ========================= core snapshot ========================= */
+  const records = []; let recording = true;
+  window.downloadPrintAudit = downloadJSON;
+  window.probePrintCenter   = (stage='manual') => snapshot(stage);
+
+  function overlayScreenCenter(){
+    const ov = document.getElementById('printAreaOverlay'); // tavs sarkanais rāmis
+    if (visible(ov)) { const r=ov.getBoundingClientRect(); return { x:r.left+r.width/2, y:r.top+r.height/2, src:'#printAreaOverlay' }; }
+    const vv = window.visualViewport;
+    const cx = (vv?vv.offsetLeft:0) + ((vv?vv.width:window.innerWidth)/2);
+    const cy = (vv?vv.offsetTop:0)  + ((vv?vv.height:window.innerHeight)/2);
+    return { x:cx, y:cy, src:'visualViewport' };
+  }
+
+  function snapshot(stage){
+    try{
+      ensureUI();
+      const map = getMap();
+      const hasLeaflet = !!(map && window.L);
+      const cont = (map && map.getContainer && map.getContainer()) || document.getElementById('onlineMap') || document.querySelector('.leaflet-container');
+      const rc   = cont ? cont.getBoundingClientRect() : { left:0, top:0, width:0, height:0 };
+      const vv   = window.visualViewport;
+      const dim  = document.getElementById('onlineMapDim');
+      const mm   = readPrintBoxMm();
+      const sa   = safeAreas();
+
+      const ov   = overlayScreenCenter();               // ekrāna koordinātes
+      const ovIn = { x: ov.x - rc.left, y: ov.y - rc.top }; // kartes konteiners (px)
+
+      // konteinera ģeometriskais centrs (ekrāna koordinātēs)
+      const contCenterScreen = { x: rc.left + rc.width/2, y: rc.top + rc.height/2 };
+
+      let keepCenter=null, keepPt=null, mapCenter=null, mapPt=null, sz={x:0,y:0}, dx=0, dy=0, distM=null, zoom=null;
+      if (hasLeaflet){
+        zoom       = map.getZoom();
+        sz         = map.getSize();
+        keepCenter = map.containerPointToLatLng(L.point(ovIn.x, ovIn.y));
+        keepPt     = map.latLngToContainerPoint(keepCenter);
+        mapCenter  = map.getCenter();
+        mapPt      = map.latLngToContainerPoint(mapCenter);
+        dx         = +(sz.x/2 - keepPt.x).toFixed(2);
+        dy         = +(sz.y/2 - keepPt.y).toFixed(2);
+        distM      = +L.latLng(keepCenter).distanceTo(mapCenter).toFixed(2);
+      }
+
+      // zīmē krustus
+      place('pca2-ovl',  ov.x, ov.y);
+      place('pca2-cont', contCenterScreen.x, contCenterScreen.y);
+      if (hasLeaflet){
+        place('pca2-keep', rc.left + keepPt.x, rc.top + keepPt.y);
+        place('pca2-map',  rc.left + mapPt.x,  rc.top + mapPt.y);
+      }
+
+      // pane transform (ja ir subpikseļu nobīdes)
+      let mapPaneTransform = null;
+      try{ const mp = cont && cont.querySelector('.leaflet-map-pane'); if (mp) mapPaneTransform = getComputedStyle(mp).transform || null; }catch(_){}
+
+      const payload = {
+        t: now(), stage,
+        dpr: window.devicePixelRatio || 1,
+        printMode: document.body.classList.contains('print-mode'),
+        printMedia: (function(){ try{ return matchMedia && matchMedia('print').matches; }catch(_){ return null; }})(),
+        viewport: {
+          w: window.innerWidth, h: window.innerHeight,
+          vv: vv ? { w:vv.width, h:vv.height, x:vv.offsetLeft, y:vv.offsetTop, scale:vv.scale } : null
+        },
+        containerRect: { left:+rc.left.toFixed(2), top:+rc.top.toFixed(2), width:+rc.width.toFixed(2), height:+rc.height.toFixed(2) },
+        overlay: { src: ov.src, screen: { x:+ov.x.toFixed(2), y:+ov.y.toFixed(2) }, inContainer: { x:+ovIn.x.toFixed(2), y:+ovIn.y.toFixed(2) } },
+        contCenterScreen: { x:+contCenterScreen.x.toFixed(2), y:+contCenterScreen.y.toFixed(2) },
+        printBoxMm: mm, printBoxPxApprox: (mm.w && mm.h) ? { w:mm2px(mm.w), h:mm2px(mm.h) } : null,
+        dimOverlay: dim ? { display:getComputedStyle(dim).display, bg:getComputedStyle(dim).backgroundColor } : null, /* tumšinātājs :contentReference[oaicite:0]{index=0} */
+        safeAreas: sa,
+        leaflet: hasLeaflet ? {
+          zoom, size: { w: sz.x, h: sz.y },
+          keepPt: keepPt ? { x:+keepPt.x.toFixed(2), y:+keepPt.y.toFixed(2) } : null,
+          mapPt:  mapPt  ? { x:+mapPt.x.toFixed(2),  y:+mapPt.y.toFixed(2)  } : null,
+          deltaPx: { dx, dy },
+          keepCenter: keepCenter ? { lat:+keepCenter.lat.toFixed(6), lng:+keepCenter.lng.toFixed(6) } : null,
+          mapCenter:  mapCenter  ? { lat:+mapCenter.lat.toFixed(6),  lng:+mapCenter.lng.toFixed(6)  } : null,
+          deltaMeters: distM
+        } : { note:'Leaflet map not ready' },
+        mapPaneTransform
+      };
+
+      if (recording) records.push(payload);
+      console.info('[PrintCenterAudit]', payload);
+
+      // HUD kopsavilkums (īsais)
+      const ln = (payload.overlay.src || 'n/a') +
+        (payload.leaflet && payload.leaflet.keepPt ? ` | Δpx=${payload.leaflet.deltaPx.dx},${payload.leaflet.deltaPx.dy} | Δm=${payload.leaflet.deltaMeters}` : ' | no-map');
+      info(`[${payload.stage}] overlay=${ln} | printMode=${payload.printMode}`);
+      return payload;
+    }catch(e){
+      console.warn('[PrintCenterAudit] snapshot failed', e);
+    }
+  }
+
+  function downloadJSON(){
+    try{
+      const blob = new Blob([ JSON.stringify({ records }, null, 2) ], { type:'application/json' });
+      const a = document.createElement('a');
+      a.download = `print-center-audit-${Date.now()}.json`;
+      a.href = URL.createObjectURL(blob);
+      document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    }catch(e){ console.warn('[PrintCenterAudit] download failed', e); }
+  }
+
+  /* ========================= wiring (READ-ONLY) ========================= */
+  function wire(){
+    ensureUI();
+
+    // manuāli
+    window.addEventListener('keydown', (e)=>{
+      if ((e.ctrlKey||e.metaKey) && e.altKey && (e.key==='p'||e.key==='P')) { e.preventDefault(); snapshot('hotkey'); }
+    });
+
+    // map events
+    const m = getMap(); if (m && m.on){ m.on('moveend zoomend', ()=> snapshot('move/zoom')); }
+
+    // wrap prepareMapForPrintLgIa — tikai SNAP; nemaina uzvedību (tavs kods paliek kā ir)
+    (function wrap(){
+      let tries = 0, wrapped = false;
+      const t = setInterval(()=>{
+        tries++;
+        if (typeof window.prepareMapForPrintLgIa === 'function' && !wrapped){
+          const orig = window.prepareMapForPrintLgIa;
+          window.prepareMapForPrintLgIa = function(){
+            snapshot('prepare-call');
+            const r = orig.apply(this, arguments);
+            if (r && typeof r.then==='function') return r.finally(()=>snapshot('prepare-done'));
+            snapshot('prepare-done'); return r;
+          };
+          wrapped = true; clearInterval(t);
+        }
+        if (tries > 50) clearInterval(t);
+      }, 200);
+    })();
+
+    // drukas dzīves cikls
+    addEventListener('beforeprint', ()=> snapshot('beforeprint'));
+    addEventListener('afterprint',  ()=> snapshot('afterprint'));
+    try{
+      const mq = matchMedia('print');
+      const onCh = e => snapshot(e.matches ? 'mql:true' : 'mql:false');
+      mq.addEventListener ? mq.addEventListener('change', onCh) : mq.addListener(onCh);
+    }catch(_){}
+
+    // print-mode klases novērošana
+    try{
+      const mo = new MutationObserver(()=> snapshot(document.body.classList.contains('print-mode') ? 'print-mode:on' : 'print-mode:off'));
+      mo.observe(document.body, { attributes:true, attributeFilter:['class'] });
+    }catch(_){}
+
+    // init snapshots
+    document.addEventListener('DOMContentLoaded', ()=> snapshot('domready'), { once:true });
+    addEventListener('load', ()=> snapshot('load'), { once:true });
+  }
+
+  document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', wire, { once:true }) : wire();
+})();
+</script> -->
+
+
+<!-- HELP FAB (peldošā poga) -->
+<button id="helpFab" aria-label="Palīdzība" title="Palīdzība (H)">?</button>
+	
+	
+</body>
+</html>
