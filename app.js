@@ -2392,7 +2392,7 @@ await new Promise(r => requestAnimationFrame(r));
     // [JAUNS] Uzzīmējam rāmja koordinātes un lielo skaitli
     addPrintGridLabels(map, scale, format, orient); 
 	// grafiskais merogs
-	//addPrintScaleBar(scale);
+	addPrintScaleBar(scale);
     window.print();
 
    // ==================== CLEANUP: PRECĪZS ATJAUNOJUMS ====================
@@ -2487,7 +2487,7 @@ function injectDynamicPrintStyle(fmt, orient){
         transform: none !important;
         display: block !important;
         page-break-inside: avoid; break-inside: avoid;
-		overflow: hidden !important; /* Kartei OBLIGĀTI hidden, lai nogrieztu flīzes */
+		/*overflow: hidden !important;*/ /* Kartei OBLIGĀTI hidden, lai nogrieztu flīzes */
       }
       #onlineMap .leaflet-zoom-anim,
       #onlineMap .leaflet-zoom-animated{
