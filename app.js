@@ -2270,7 +2270,216 @@ function __hookPrintMediaRecenter(map, ll){
 
 
 
+// ==================== PRINT TILE SNAPSHOT FIX ====================
+// Chrome print preview dažreiz nedrukā dzīvo Leaflet tile-pane.
+// Tāpēc pirms drukas izveidojam statisku flīžu slāni no aktīvā XYZ tile layer.
 
+function __printRaf2(){
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
+function __createPrintScreenMirror(){
+  const old = document.getElementById('printScreenMirrorStyle');
+  if (old) old.remove();
+
+  let css = '';
+
+  for (const ss of Array.from(document.styleSheets)) {
+    try {
+      const owner = ss.ownerNode;
+      if (owner && owner.id === 'printScreenMirrorStyle') continue;
+
+      const rules = ss.cssRules || ss.rules;
+      if (!rules) continue;
+
+      for (const rule of Array.from(rules)) {
+        const isMedia =
+          rule.type === CSSRule.MEDIA_RULE &&
+          /print/i.test(rule.media.mediaText);
+
+        if (!isMedia) continue;
+
+        for (const rr of Array.from(rule.cssRules)) {
+          css += rr.cssText + '\n';
+        }
+      }
+    } catch (_) {
+      // Cross-origin CSS var neļaut lasīt cssRules. Ignorējam.
+    }
+  }
+
+  const mirror = document.createElement('style');
+  mirror.id = 'printScreenMirrorStyle';
+  mirror.textContent = css;
+  document.head.appendChild(mirror);
+
+  return mirror;
+}
+
+function __findActivePrintTileLayer(map){
+  let found = null;
+
+  try {
+    map.eachLayer(layer => {
+      if (
+        layer &&
+        layer._map === map &&
+        layer._url &&
+        typeof layer._url === 'string' &&
+        layer._url.includes('{z}') &&
+        layer._url.includes('{x}') &&
+        layer._url.includes('{y}')
+      ) {
+        // Ņemam pēdējo piemēroto, jo tas parasti ir aktīvais/virsējais bāzes slānis
+        found = layer;
+      }
+    });
+  } catch (_) {}
+
+  return found;
+}
+
+function __printTileSubdomain(layer, x, y){
+  const s = layer.options && layer.options.subdomains;
+
+  if (Array.isArray(s) && s.length) {
+    return s[Math.abs(x + y) % s.length];
+  }
+
+  if (typeof s === 'string' && s.length) {
+    return s[Math.abs(x + y) % s.length];
+  }
+
+  return '';
+}
+
+function __makePrintTileUrl(layer, x, y, z){
+  const n = Math.pow(2, z);
+
+  let tx = x;
+  let ty = y;
+
+  tx = ((tx % n) + n) % n;
+
+  if (ty < 0 || ty >= n) return null;
+
+  if (layer.options && layer.options.tms) {
+    ty = n - ty - 1;
+  }
+
+  const data = Object.assign({}, layer.options || {}, {
+    s: __printTileSubdomain(layer, tx, ty),
+    x: tx,
+    y: ty,
+    z: Math.round(z),
+    r: ''
+  });
+
+  try {
+    return L.Util.template(layer._url, data);
+  } catch (e) {
+    console.warn('[print snapshot] tile url error', e);
+    return null;
+  }
+}
+
+async function __buildPrintTileRebuildSnapshot(map){
+  const mapEl = document.getElementById('onlineMap');
+
+  if (!map || !mapEl || !window.L) {
+    console.warn('[print snapshot] nav map / onlineMap / Leaflet');
+    return null;
+  }
+
+  const layer = __findActivePrintTileLayer(map);
+
+  if (!layer) {
+    console.warn('[print snapshot] aktīvs XYZ tile layer nav atrasts');
+    return null;
+  }
+
+  let snap = document.getElementById('printTileRebuild');
+
+  if (!snap) {
+    snap = document.createElement('div');
+    snap.id = 'printTileRebuild';
+    mapEl.appendChild(snap);
+  }
+
+  snap.innerHTML = '';
+
+  const z = Math.round(map.getZoom());
+  const size = map.getSize();
+  const tileSizePoint = layer.getTileSize ? layer.getTileSize() : L.point(256, 256);
+  const tileW = tileSizePoint.x || 256;
+  const tileH = tileSizePoint.y || 256;
+
+  let pixelBounds;
+
+  try {
+    pixelBounds = map.getPixelBounds(map.getCenter(), z);
+  } catch (_) {
+    const centerPoint = map.project(map.getCenter(), z);
+    const half = size.divideBy(2);
+    pixelBounds = L.bounds(centerPoint.subtract(half), centerPoint.add(half));
+  }
+
+  const minX = Math.floor(pixelBounds.min.x / tileW);
+  const maxX = Math.floor(pixelBounds.max.x / tileW);
+  const minY = Math.floor(pixelBounds.min.y / tileH);
+  const maxY = Math.floor(pixelBounds.max.y / tileH);
+
+  let created = 0;
+
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      const url = __makePrintTileUrl(layer, x, y, z);
+      if (!url) continue;
+
+      const img = document.createElement('img');
+
+      img.src = url;
+      img.alt = '';
+      img.decoding = 'sync';
+      img.loading = 'eager';
+
+      img.style.left = Math.round(x * tileW - pixelBounds.min.x) + 'px';
+      img.style.top = Math.round(y * tileH - pixelBounds.min.y) + 'px';
+      img.style.width = tileW + 'px';
+      img.style.height = tileH + 'px';
+
+      snap.appendChild(img);
+      created++;
+    }
+  }
+
+  await Promise.all(Array.from(snap.querySelectorAll('img')).map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+
+    return new Promise(resolve => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  }));
+
+  const loaded = Array.from(snap.querySelectorAll('img'))
+    .filter(img => img.naturalWidth > 0)
+    .length;
+
+  console.info('[print snapshot] layer:', layer._url);
+  console.info('[print snapshot] z:', z, 'created:', created, 'loaded:', loaded);
+
+  if (created === 0 || loaded === 0) {
+    snap.remove();
+    document.body.classList.remove('has-print-tile-rebuild');
+    return null;
+  }
+
+  document.body.classList.add('has-print-tile-rebuild');
+
+  return snap;
+}
+// ==================== /PRINT TILE SNAPSHOT FIX ====================
 
 
 
@@ -2315,7 +2524,8 @@ async function prepareMapForPrintLgIa(opts){
   // 4) ieslēdz print režīmu + @page
   document.body.classList.add('print-mode');
   const styleEl = injectDynamicPrintStyle(format, orient);
-
+const mirrorStyleEl = __createPrintScreenMirror();
+await __printRaf2();
   // 5) reflow + sākotnējā centrēšana
   await new Promise(r => requestAnimationFrame(r));
   map.invalidateSize(true);
@@ -2387,16 +2597,39 @@ await new Promise(r => requestAnimationFrame(r));
     await waitForMapToRender(map, { timeout: 12000, settle: 200 });
     __hidePrintGuardOverlay();
 
-    await __recenterMapToLL(map, keepCenter);
+  await __recenterMapToLL(map, keepCenter);
 
-    // [JAUNS] Uzzīmējam rāmja koordinātes un lielo skaitli
-    addPrintGridLabels(map, scale, format, orient); 
-	// grafiskais merogs
-	addPrintScaleBar(scale);
-    window.print();
+// Pirms drukas izveidojam statisku kartes flīžu slāni.
+// Ja neizdodas, turpinās vecais mehānisms kā fallback.
+const printTileSnapshotEl = await __buildPrintTileRebuildSnapshot(map);
+
+// [JAUNS] Uzzīmējam rāmja koordinātes un lielo skaitli
+addPrintGridLabels(map, scale, format, orient); 
+
+// grafiskais merogs
+addPrintScaleBar(scale);
+
+window.print();
 
    // ==================== CLEANUP: PRECĪZS ATJAUNOJUMS ====================
     function cleanup(){
+
+try {
+  const snap = document.getElementById('printTileRebuild');
+  if (snap) snap.remove();
+} catch (_) {}
+
+try {
+  const mirror = document.getElementById('printScreenMirrorStyle');
+  if (mirror) mirror.remove();
+} catch (_) {}
+
+try {
+  document.body.classList.remove('has-print-tile-rebuild');
+} catch (_) {}
+
+
+		
 // [JAUNS] SĀKUMĀ: Notīrām rāmja ciparus un lielo skaitli
       if (window.__printOverlayEls) {
         window.__printOverlayEls.forEach(el => el.remove());
@@ -2626,7 +2859,57 @@ body.print-mode #printNorthTR .n{
   `;
   let el = document.getElementById('dynamicPrintStyle');
   if (!el){ el = document.createElement('style'); el.id = 'dynamicPrintStyle'; document.head.appendChild(el); }
-  el.textContent = css;
+  el.textContent = css + `
+
+#printTileRebuild {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  z-index: 210 !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  background: transparent !important;
+}
+
+#printTileRebuild img {
+  position: absolute !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+body.print-mode.has-print-tile-rebuild #onlineMap .leaflet-tile-pane {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+@media print {
+  #printTileRebuild,
+  #printTileRebuild img {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  body.print-mode.has-print-tile-rebuild #onlineMap .leaflet-tile-pane {
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+
+  body.print-mode #onlineMapDim {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+}
+`;
   return el;
 }
 
