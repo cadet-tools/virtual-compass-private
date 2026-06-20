@@ -2389,7 +2389,7 @@ await new Promise(r => requestAnimationFrame(r));
     await __recenterMapToLL(map, keepCenter);
 
     // [JAUNS] Uzzīmējam rāmja koordinātes un lielo skaitli
-    addPrintGridLabels(map, scale); 
+    addPrintGridLabels(map, scale, format, orient); 
 	// grafiskais merogs
 	addPrintScaleBar(scale);
     window.print();
