@@ -823,17 +823,15 @@
 
 
 <script>
-/* PRINT TILE HOTFIX TEST v3
-   Labo:
-   1) saglabā L.tileLayer.wms;
-   2) OSM slānim noņem crossOrigin;
-   3) flīžu URL zoom vērtību drukā noapaļo uz veselu skaitli.
+/* PRINT TILE HOTFIX TEST v4
+   Galvenais: noapaļo Leaflet tile URL zoom VIENMĒR, ne tikai print-mode,
+   jo tavs app.js uzliek frakcionētu zoom pirms body.print-mode.
 */
 (function(){
   'use strict';
 
-  if (window.__printTileHotfixV3) return;
-  window.__printTileHotfixV3 = true;
+  if (window.__printTileHotfixV4) return;
+  window.__printTileHotfixV4 = true;
 
   function patchLeaflet(){
     if (!window.L || !L.TileLayer || !L.TileLayer.prototype || !L.tileLayer) {
@@ -841,22 +839,17 @@
       return;
     }
 
-    if (L.TileLayer.prototype.__cadetPrintTilePatchV3) return;
-    L.TileLayer.prototype.__cadetPrintTilePatchV3 = true;
+    if (L.TileLayer.prototype.__cadetPrintTilePatchV4) return;
+    L.TileLayer.prototype.__cadetPrintTilePatchV4 = true;
 
-    /* 1) Noapaļo zoom, ko Leaflet liek tile URL kā {z} */
+    /* A) Noapaļo zoom, ko Leaflet izmanto {z} flīžu URL */
     if (typeof L.TileLayer.prototype._getZoomForUrl === 'function') {
       const originalGetZoomForUrl = L.TileLayer.prototype._getZoomForUrl;
 
       L.TileLayer.prototype._getZoomForUrl = function(){
         const z = originalGetZoomForUrl.call(this);
 
-        if (
-          document.body &&
-          document.body.classList.contains('print-mode') &&
-          typeof z === 'number' &&
-          !Number.isInteger(z)
-        ) {
+        if (typeof z === 'number' && !Number.isInteger(z)) {
           return Math.round(z);
         }
 
@@ -864,7 +857,22 @@
       };
     }
 
-    /* 2) Aptin L.tileLayer, bet SAGLABĀ L.tileLayer.wms */
+    /* B) Papildu drošība: ja coords.z vēl nonāk decimāls, noapaļo arī to */
+    if (typeof L.TileLayer.prototype.getTileUrl === 'function') {
+      const originalGetTileUrl = L.TileLayer.prototype.getTileUrl;
+
+      L.TileLayer.prototype.getTileUrl = function(coords){
+        let c = coords;
+
+        if (coords && typeof coords.z === 'number' && !Number.isInteger(coords.z)) {
+          c = Object.assign({}, coords, { z: Math.round(coords.z) });
+        }
+
+        return originalGetTileUrl.call(this, c);
+      };
+    }
+
+    /* C) Aptin L.tileLayer, bet saglabā L.tileLayer.wms */
     const originalTileLayerFactory = L.tileLayer;
 
     const wrappedTileLayerFactory = function(url, options){
@@ -883,7 +891,6 @@
       return originalTileLayerFactory.call(this, url, options);
     };
 
-    /* Pārnesam īpašības no vecās L.tileLayer funkcijas */
     try {
       Object.getOwnPropertyNames(originalTileLayerFactory).forEach(function(key){
         if (key === 'length' || key === 'name' || key === 'prototype') return;
@@ -893,7 +900,6 @@
       });
     } catch(_) {}
 
-    /* Īpaši svarīgi: atjaunojam WMS fabriku */
     if (originalTileLayerFactory.wms) {
       wrappedTileLayerFactory.wms = originalTileLayerFactory.wms;
     } else if (L.TileLayer && L.TileLayer.WMS) {
@@ -904,13 +910,12 @@
 
     L.tileLayer = wrappedTileLayerFactory;
 
-    console.info('[cadet print tile hotfix v3] active: WMS preserved, OSM CORS off, print zoom rounded');
+    console.info('[cadet print tile hotfix v4] active: tile zoom rounded always, WMS preserved, OSM crossOrigin off');
   }
 
   patchLeaflet();
 })();
 </script>
-
 
 
 
