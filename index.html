@@ -823,41 +823,51 @@
 
 
 <script>
-/* PRINT TILE HOTFIX TEST v2
-   Labo divas lietas:
-   1) Leaflet tile URL z vērtību piespiež uz veselu skaitli.
-   2) OSM flīzēm noņem crossOrigin, jo OSM tās šeit bloķē ar CORS.
+/* PRINT TILE HOTFIX TEST v3
+   Labo:
+   1) saglabā L.tileLayer.wms;
+   2) OSM slānim noņem crossOrigin;
+   3) flīžu URL zoom vērtību drukā noapaļo uz veselu skaitli.
 */
 (function(){
   'use strict';
 
-  if (window.__printTileHotfixV2) return;
-  window.__printTileHotfixV2 = true;
+  if (window.__printTileHotfixV3) return;
+  window.__printTileHotfixV3 = true;
 
   function patchLeaflet(){
-    if (!window.L || !L.TileLayer || !L.TileLayer.prototype) {
+    if (!window.L || !L.TileLayer || !L.TileLayer.prototype || !L.tileLayer) {
       setTimeout(patchLeaflet, 50);
       return;
     }
 
-    if (L.TileLayer.prototype.__cadetTilePatchV2) return;
-    L.TileLayer.prototype.__cadetTilePatchV2 = true;
+    if (L.TileLayer.prototype.__cadetPrintTilePatchV3) return;
+    L.TileLayer.prototype.__cadetPrintTilePatchV3 = true;
 
-    const originalGetTileUrl = L.TileLayer.prototype.getTileUrl;
+    /* 1) Noapaļo zoom, ko Leaflet liek tile URL kā {z} */
+    if (typeof L.TileLayer.prototype._getZoomForUrl === 'function') {
+      const originalGetZoomForUrl = L.TileLayer.prototype._getZoomForUrl;
 
-    L.TileLayer.prototype.getTileUrl = function(coords){
-      const c = Object.assign({}, coords);
+      L.TileLayer.prototype._getZoomForUrl = function(){
+        const z = originalGetZoomForUrl.call(this);
 
-      if (typeof c.z === 'number' && !Number.isInteger(c.z)) {
-        c.z = Math.round(c.z);
-      }
+        if (
+          document.body &&
+          document.body.classList.contains('print-mode') &&
+          typeof z === 'number' &&
+          !Number.isInteger(z)
+        ) {
+          return Math.round(z);
+        }
 
-      return originalGetTileUrl.call(this, c);
-    };
+        return z;
+      };
+    }
 
+    /* 2) Aptin L.tileLayer, bet SAGLABĀ L.tileLayer.wms */
     const originalTileLayerFactory = L.tileLayer;
 
-    L.tileLayer = function(url, options){
+    const wrappedTileLayerFactory = function(url, options){
       options = options || {};
 
       const isOsm =
@@ -873,14 +883,33 @@
       return originalTileLayerFactory.call(this, url, options);
     };
 
-    console.info('[cadet tile hotfix v2] active: rounded z + OSM crossOrigin off');
+    /* Pārnesam īpašības no vecās L.tileLayer funkcijas */
+    try {
+      Object.getOwnPropertyNames(originalTileLayerFactory).forEach(function(key){
+        if (key === 'length' || key === 'name' || key === 'prototype') return;
+        try {
+          wrappedTileLayerFactory[key] = originalTileLayerFactory[key];
+        } catch(_) {}
+      });
+    } catch(_) {}
+
+    /* Īpaši svarīgi: atjaunojam WMS fabriku */
+    if (originalTileLayerFactory.wms) {
+      wrappedTileLayerFactory.wms = originalTileLayerFactory.wms;
+    } else if (L.TileLayer && L.TileLayer.WMS) {
+      wrappedTileLayerFactory.wms = function(url, options){
+        return new L.TileLayer.WMS(url, options);
+      };
+    }
+
+    L.tileLayer = wrappedTileLayerFactory;
+
+    console.info('[cadet print tile hotfix v3] active: WMS preserved, OSM CORS off, print zoom rounded');
   }
 
   patchLeaflet();
 })();
 </script>
-
-
 
 
 
