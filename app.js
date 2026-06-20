@@ -2476,8 +2476,33 @@ function injectDynamicPrintStyle(fmt, orient){
     @media print {
       html, body { height:auto !important; overflow:hidden !important; }
       #resizeHandle{ display:none !important; }
-      body.print-mode > *:not(#canvasContainer):not(#printScaleTop):not(#printTitleTL):not(#printNorthTR):not(#printSourceBL):not(#printGridBR):not(#printGridOverlay):not(#printCornerInfo):not(#printScaleBar){ display:none !important; }
-      body.print-mode #canvasContainer > *:not(#onlineMap){ display:none !important; }
+/* TEST-5: display:none vietā izmantojam visibility, lai Leaflet flīzes neizkristu no print rendera */
+body.print-mode > * {
+  visibility: hidden !important;
+}
+
+body.print-mode #canvasContainer,
+body.print-mode #canvasContainer *,
+body.print-mode #onlineMap,
+body.print-mode #onlineMap *,
+body.print-mode #printScaleTop,
+body.print-mode #printScaleTop *,
+body.print-mode #printTitleTL,
+body.print-mode #printTitleTL *,
+body.print-mode #printNorthTR,
+body.print-mode #printNorthTR *,
+body.print-mode #printSourceBL,
+body.print-mode #printSourceBL *,
+body.print-mode #printGridBR,
+body.print-mode #printGridBR *,
+body.print-mode #printGridOverlay,
+body.print-mode #printGridOverlay *,
+body.print-mode #printCornerInfo,
+body.print-mode #printCornerInfo *,
+body.print-mode #printScaleBar,
+body.print-mode #printScaleBar * {
+  visibility: visible !important;
+}
       body.print-mode #onlineMap{
         position: fixed !important;
         inset: 0 !important;
@@ -2489,6 +2514,24 @@ function injectDynamicPrintStyle(fmt, orient){
         page-break-inside: avoid; break-inside: avoid;
 		overflow: hidden !important; /* Kartei OBLIGĀTI hidden, lai nogrieztu flīzes */
       }
+
+
+body.print-mode #onlineMap .leaflet-pane,
+body.print-mode #onlineMap .leaflet-map-pane,
+body.print-mode #onlineMap .leaflet-tile-pane,
+body.print-mode #onlineMap .leaflet-overlay-pane,
+body.print-mode #onlineMap .leaflet-layer,
+body.print-mode #onlineMap .leaflet-tile-container,
+body.print-mode #onlineMap img.leaflet-tile,
+body.print-mode #onlineMap img.leaflet-image-layer {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+
+
+	  
       #onlineMap .leaflet-zoom-anim,
       #onlineMap .leaflet-zoom-animated{
         transition: none !important;
